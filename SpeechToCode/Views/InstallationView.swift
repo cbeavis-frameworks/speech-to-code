@@ -105,9 +105,7 @@ struct InstallationView: View {
                     
                     if let error = installationState?.statusMessage, 
                        installationState?.nodeInstalled == false {
-                        Text(error)
-                            .font(.callout)
-                            .foregroundColor(.red)
+                        // Error message is hidden
                     }
                 }
             }
