@@ -13,19 +13,27 @@ final class NpmPackageInstallerTests: XCTestCase {
         npmInstaller = NpmPackageInstaller()
         
         // For tests, we'll try to find node in the system path
-        let whichNodeResult = try? Process.run(URL(fileURLWithPath: "/usr/bin/which"), arguments: ["node"])
-        let outputPipe = Pipe()
-        whichNodeResult?.standardOutput = outputPipe
-        whichNodeResult?.waitUntilExit()
-        
-        if let data = try? outputPipe.fileHandleForReading.readToEnd(),
-           let nodePath = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !nodePath.isEmpty {
-            nodeDirectory = URL(fileURLWithPath: nodePath).deletingLastPathComponent()
-            print("Found Node.js at: \(nodeDirectory?.path ?? "unknown")")
-        } else {
-            // Alternatively, check the user's installation state if possible
-            print("Unable to find Node.js in system path")
+        do {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/which")
+            process.arguments = ["node"]
+            
+            let outputPipe = Pipe()
+            process.standardOutput = outputPipe
+            
+            try process.run()
+            process.waitUntilExit()
+            
+            if let data = try outputPipe.fileHandleForReading.readToEnd(),
+               let nodePath = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !nodePath.isEmpty {
+                nodeDirectory = URL(fileURLWithPath: nodePath).deletingLastPathComponent()
+                print("Found Node.js at: \(nodeDirectory?.path ?? "unknown")")
+            } else {
+                print("Unable to find Node.js in system path")
+            }
+        } catch {
+            print("Error finding Node.js: \(error.localizedDescription)")
         }
     }
     
