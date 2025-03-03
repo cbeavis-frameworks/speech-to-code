@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import OSLog
 
 /// Utility class to install, uninstall, and verify npm packages
 public class NpmPackageInstaller {
@@ -42,8 +43,24 @@ public class NpmPackageInstaller {
     /// Last error encountered during operations
     public private(set) var error: String?
     
-    /// Lock to prevent concurrent npm operations
-    private let npmLock = NSLock()
+    /// Actor to handle mutex operations in an async-safe way
+    private actor MutexActor {
+        private var isLocked = false
+        
+        func lock() async {
+            while isLocked {
+                try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+            }
+            isLocked = true
+        }
+        
+        func unlock() {
+            isLocked = false
+        }
+    }
+    
+    /// Mutex actor instance to prevent concurrent npm operations
+    private let mutexActor = MutexActor()
     
     /// Delay between npm operations in seconds to avoid "tracker already exists" errors
     private let operationDelay: TimeInterval = 1.0
@@ -67,12 +84,12 @@ public class NpmPackageInstaller {
     ) async -> Bool {
         
         // Acquire lock to prevent concurrent npm operations
-        npmLock.lock()
+        await mutexActor.lock()
         defer {
             // Schedule the lock release after a delay to avoid "tracker already exists" errors
             Task {
                 try? await Task.sleep(nanoseconds: UInt64(operationDelay * 1_000_000_000))
-                npmLock.unlock()
+                await mutexActor.unlock()
             }
         }
         
@@ -115,15 +132,15 @@ public class NpmPackageInstaller {
         )
         
         // Check for success
-        if result.exitCode == 0 {
+        if result.succeeded {
             status.send("Successfully installed \(packageSpec)")
             error = nil
             return true
         } else {
-            let errorMessage = result.standardError.isEmpty ? "Exit code: \(result.exitCode)" : result.standardError
+            let errorMessage = result.stderr.isEmpty ? "Exit code: \(result.exitCode)" : result.stderr
             error = errorMessage
             status.send("Failed to install \(packageSpec): \(errorMessage)")
-            Logger.shared.error("Failed to install npm package: \(packageName). Error: \(errorMessage)")
+            AppLogger.log(AppLogger.installation, level: .error, message: "Failed to install npm package: \(packageName). Error: \(errorMessage)")
             return false
         }
     }
@@ -143,12 +160,12 @@ public class NpmPackageInstaller {
     ) async -> PackageCheckResult {
         
         // Acquire lock to prevent concurrent npm operations
-        npmLock.lock()
+        await mutexActor.lock()
         defer {
             // Schedule the lock release after a delay to avoid "tracker already exists" errors
             Task {
                 try? await Task.sleep(nanoseconds: UInt64(operationDelay * 1_000_000_000))
-                npmLock.unlock()
+                await mutexActor.unlock()
             }
         }
         
@@ -185,15 +202,15 @@ public class NpmPackageInstaller {
         
         if result.exitCode != 0 && result.exitCode != 1 {
             // npm list can return 1 even on partial success
-            let errorMessage = result.standardError.isEmpty ? "Exit code: \(result.exitCode)" : result.standardError
+            let errorMessage = result.stderr.isEmpty ? "Exit code: \(result.exitCode)" : result.stderr
             error = errorMessage
             status.send("Failed to check if \(packageName) is installed: \(errorMessage)")
-            Logger.shared.error("Failed to check npm package: \(packageName). Error: \(errorMessage)")
+            AppLogger.log(AppLogger.installation, level: .error, message: "Failed to check npm package: \(packageName). Error: \(errorMessage)")
             return PackageCheckResult(installed: false)
         }
         
         // Parse the JSON output to check if package exists and get its version
-        guard let jsonData = result.standardOutput.data(using: .utf8) else {
+        guard let jsonData = result.stdout.data(using: .utf8) else {
             error = "Could not parse npm list output"
             return PackageCheckResult(installed: false)
         }
@@ -231,12 +248,12 @@ public class NpmPackageInstaller {
     ) async -> Bool {
         
         // Acquire lock to prevent concurrent npm operations
-        npmLock.lock()
+        await mutexActor.lock()
         defer {
             // Schedule the lock release after a delay to avoid "tracker already exists" errors
             Task {
                 try? await Task.sleep(nanoseconds: UInt64(operationDelay * 1_000_000_000))
-                npmLock.unlock()
+                await mutexActor.unlock()
             }
         }
         
@@ -272,15 +289,15 @@ public class NpmPackageInstaller {
         )
         
         // Check for success
-        if result.exitCode == 0 {
+        if result.succeeded {
             status.send("Successfully uninstalled \(packageName)")
             error = nil
             return true
         } else {
-            let errorMessage = result.standardError.isEmpty ? "Exit code: \(result.exitCode)" : result.standardError
+            let errorMessage = result.stderr.isEmpty ? "Exit code: \(result.exitCode)" : result.stderr
             error = errorMessage
             status.send("Failed to uninstall \(packageName): \(errorMessage)")
-            Logger.shared.error("Failed to uninstall npm package: \(packageName). Error: \(errorMessage)")
+            AppLogger.log(AppLogger.installation, level: .error, message: "Failed to uninstall npm package: \(packageName). Error: \(errorMessage)")
             return false
         }
     }

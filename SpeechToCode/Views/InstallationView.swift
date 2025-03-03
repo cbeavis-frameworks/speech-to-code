@@ -83,9 +83,9 @@ struct InstallationView: View {
                     
                     Button(action: {
                         Task {
-                            let success = await installationManager.performInstallation()
+                            _ = await installationManager.performInstallation()
                             // Force a refresh of the installation state
-                            if success {
+                            if installationManager.isInstalling {
                                 try? await Task.sleep(nanoseconds: 500_000_000) // Wait half a second
                                 await loadInstallationState() // Reload state to update UI
                             }
@@ -131,7 +131,7 @@ struct InstallationView: View {
         
         if cleaned {
             await loadInstallationState()
-            let success = await installationManager.performInstallation()
+            await installationManager.performInstallation()
             
             // Add a brief delay to allow database operations to complete
             try? await Task.sleep(nanoseconds: 500_000_000) // Wait half a second
