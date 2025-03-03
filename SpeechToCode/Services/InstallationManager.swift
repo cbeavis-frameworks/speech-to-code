@@ -101,7 +101,7 @@ class InstallationManager: ObservableObject {
         }
         
         // Create or use existing installation state
-        let installationState = loadOrCreateInstallationState(modelContext: modelContext!)
+        let installationState = loadOrCreateInstallationState(modelContext: modelContext ?? ModelContext())
         
         // Create observers for progress updates
         setupProgressObservers()
@@ -151,7 +151,7 @@ class InstallationManager: ObservableObject {
             updateStatus(status: .inProgress, message: "Node.js and npm installed successfully! Node: \(nodeVersion), npm: \(npmVersion)", progress: 0.7)
             
             // Update the installation state for Node.js
-            await updateInstallationState(
+            updateInstallationState(
                 nodeInstalled: true,
                 nodePath: nodePath,
                 nodeVersion: nodeVersion
@@ -163,7 +163,7 @@ class InstallationManager: ObservableObject {
             // Install the Claude package globally
             let nodeBinDir = URL(fileURLWithPath: nodePath).deletingLastPathComponent()
             let claudeInstalled = await npmInstaller.installPackage(
-                packageSpec: claudePackageName, 
+                packageName: claudePackageName, 
                 global: true, 
                 nodeDirectory: nodeBinDir,
                 workingDirectory: nil
@@ -180,7 +180,7 @@ class InstallationManager: ObservableObject {
                 let claudeVersion = claudeCheck.version ?? "Unknown"
                 
                 // Update the installation state for Claude
-                await updateInstallationState(
+                updateInstallationState(
                     nodeInstalled: true,
                     nodePath: nodePath,
                     nodeVersion: nodeVersion,
@@ -192,7 +192,7 @@ class InstallationManager: ObservableObject {
                 AppLogger.log(AppLogger.installation, level: .info, message: "Claude package installed successfully. Version: \(claudeVersion)")
             } else {
                 // Update with Node.js success but Claude failure
-                await updateInstallationState(
+                updateInstallationState(
                     nodeInstalled: true,
                     nodePath: nodePath,
                     nodeVersion: nodeVersion,
@@ -208,7 +208,7 @@ class InstallationManager: ObservableObject {
             updateStatus(status: .partialSuccess, message: "Node.js installed successfully but npm verification failed. Node: \(nodeVersion)", progress: 0.7)
             
             // Update the installation state with just Node.js
-            await updateInstallationState(
+            updateInstallationState(
                 nodeInstalled: true,
                 nodePath: nodePath,
                 nodeVersion: nodeVersion
