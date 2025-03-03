@@ -4,6 +4,21 @@ All notable changes to the SpeechToCode project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- App cleanup service to reset installation on app launch (in DEBUG mode)
+- Force installation view to show after cleanup
+
+### Changed
+- Claude package installation now uses local installation instead of global
+- Improved version detection for npm packages
+- Simplified error handling in the UI by hiding error messages
+- Fixed Claude package version detection
+
+### Fixed
+- Fixed "Unknown" version issue with Claude package installation
+- Resolved ModelContext handling in InstallationManager
+- Updated Claude package name to @anthropic-ai/claude-code
+
 ## [0.2.0] - 2025-03-03
 
 ### Added

@@ -36,6 +36,16 @@ Node.js is installed in the application's support directory:
 
 This ensures a consistent environment for the app regardless of whether the user has Node.js installed elsewhere on their system.
 
+## Development and Debugging Mode
+
+During development, the app includes an automatic cleanup feature that:
+
+1. Removes all Node.js and npm package installations
+2. Resets the installation state in SwiftData
+3. Clears the NodePath singleton
+
+This cleanup happens automatically when the app launches in DEBUG mode, allowing developers to test the installation process with each run. This feature can be disabled by setting `AppCleanupService.cleanOnLaunch = false` in SpeechToCodeApp.swift.
+
 ## Installation State Tracking
 
 The `InstallationState` model tracks:
@@ -70,6 +80,12 @@ npm can have issues with concurrent operations. The app implements locking mecha
 While the app handles installation automatically, users can also manually install dependencies:
 
 1. Install Node.js from the official website (https://nodejs.org/)
-2. Install the Claude Code CLI: `npm install -g @anthropic-ai/claude-code@0.2.29`
+2. Install the Claude Code CLI: `npm install -g @anthropic-ai/claude-code@0.2.30`
 
 The app will detect these manual installations if they are in the standard locations.
+
+## npm Package Details
+
+The following npm packages are used by the application:
+
+- `@anthropic-ai/claude-code`: The Claude Code CLI tool that powers the code generation and voice command processing. This package is installed locally within the app's bin directory rather than globally.
