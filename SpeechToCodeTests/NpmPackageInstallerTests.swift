@@ -1,28 +1,31 @@
 import XCTest
+import SwiftData
 @testable import SpeechToCode
 
 final class NpmPackageInstallerTests: XCTestCase {
     
     private var npmInstaller: NpmPackageInstaller!
-    private var nodeDirectory: URL!
+    private var nodeDirectory: URL?
     
     override func setUpWithError() throws {
         super.setUp()
         
         npmInstaller = NpmPackageInstaller()
         
-        // Get the node directory from the installation state or use a mock path for testing
-        let modelContext = try ModelContainer(for: InstallationState.self).mainContext
-        let descriptor = FetchDescriptor<InstallationState>()
+        // For tests, we'll try to find node in the system path
+        let whichNodeResult = try? Process.run(URL(fileURLWithPath: "/usr/bin/which"), arguments: ["node"])
+        let outputPipe = Pipe()
+        whichNodeResult?.standardOutput = outputPipe
+        whichNodeResult?.waitUntilExit()
         
-        if let installationState = try? modelContext.fetch(descriptor).first,
-           let nodePath = installationState.nodePath,
-           installationState.nodeInstalled {
-            // Use the actual Node.js installation path
+        if let data = try? outputPipe.fileHandleForReading.readToEnd(),
+           let nodePath = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !nodePath.isEmpty {
             nodeDirectory = URL(fileURLWithPath: nodePath).deletingLastPathComponent()
+            print("Found Node.js at: \(nodeDirectory?.path ?? "unknown")")
         } else {
-            // For testing, skip actual tests if Node.js isn't installed
-            throw XCTSkip("Node.js not installed, skipping npm package installer tests")
+            // Alternatively, check the user's installation state if possible
+            print("Unable to find Node.js in system path")
         }
     }
     
@@ -33,6 +36,10 @@ final class NpmPackageInstallerTests: XCTestCase {
     }
     
     func testPackageInstallation() async throws {
+        guard let nodeDirectory = nodeDirectory else {
+            throw XCTSkip("Node.js installation directory not found, skipping test")
+        }
+        
         // This is a test package that's small and commonly used
         let packageName = "is-odd"
         let version = "3.0.1"
