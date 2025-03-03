@@ -113,18 +113,12 @@ final class NodeInstallerTests: XCTestCase {
     
     private func hasInternetConnection() async -> Bool {
         // Simple connectivity test - try to resolve a reliable domain
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/nslookup")
-        process.arguments = ["nodejs.org"]
-        
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        
         do {
-            try await process.run()
-            process.waitUntilExit()
-            return process.terminationStatus == 0
+            let result = await ProcessRunner.run(
+                "/usr/bin/nslookup",
+                arguments: ["nodejs.org"]
+            )
+            return result.succeeded
         } catch {
             print("⚠️ Network connectivity check failed: \(error.localizedDescription)")
             return false

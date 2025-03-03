@@ -12,6 +12,8 @@ All notable changes to the SpeechToCode project will be documented in this file.
 - Flag to enable/disable verbose context in logs
 - Customizable logging levels for different parts of the application
 - Testing with Claude Code CLI npm package
+- NodeInstaller tests to verify installation functionality
+- Common installation directory for Node.js under Application Support
 
 ### Changed
 - Simplified the installation process to focus only on Node.js
@@ -19,6 +21,7 @@ All notable changes to the SpeechToCode project will be documented in this file.
 - Increased npm operation delay from 1.0s to 1.5s for improved reliability
 - Improved Node.js path detection with more deterministic approach
 - Updated tests to disable console logging for cleaner output
+- Modified InstallationManager to use the common install directory
 
 ### Removed
 - All Claude Code installation logic (ClaudeCodeInstaller.swift)

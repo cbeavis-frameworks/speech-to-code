@@ -49,6 +49,9 @@ Once dependencies are installed, the app facilitates:
 
 - **InstallationManager**: Coordinates the installation of dependencies
 - **NodeInstaller**: Handles downloading and installing Node.js
+  - Provides a common installation directory under Application Support
+  - Ensures consistent installation location across app launches
+  - Handles platform-specific requirements (arm64/x86_64)
 - **NpmPackageInstaller**: Manages npm package installations
 - **AppStateManager**: Handles the application state persistence and retrieval
 
@@ -82,6 +85,8 @@ The application handles its own setup automatically, including:
 ## Testing Strategy
 
 - **Unit Tests**: Cover core functionality like package installation
+  - **NodeInstallerTests**: Verify Node.js installation and common directory functionality
+  - **NpmPackageInstallerTests**: Test npm package installation capabilities
 - **UI Tests**: Verify the application's interface and user flows
 
 ## Future Enhancements
