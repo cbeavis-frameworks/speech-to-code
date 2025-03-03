@@ -20,26 +20,27 @@ final class NpmPackageInstallerTests: XCTestCase {
         
         try FileManager.default.createDirectory(at: tempPath, withIntermediateDirectories: true)
         tempDirectory = tempPath
-        print("Created temp directory for npm operations: \(tempPath.path)")
+        print("📂 Created temp directory for npm operations")
         
         // Initialize package.json in the temp directory
         try "{\n  \"name\": \"npm-test\",\n  \"version\": \"1.0.0\"\n}".write(to: tempPath.appendingPathComponent("package.json"), atomically: true, encoding: .utf8)
         
-        // First try to find Node.js using our app's installation state by using a synchronous approach
-        // Skip SwiftData in tests for now as it requires main actor
+        // Get the Node.js installation directory from the app's InstallationState
+        // We'll do this by checking common installation locations since we can't easily
+        // access SwiftData in tests without MainActor complications
         
-        // Check the app's default installation directory first
+        // Standard app installation directory
         let appSupportDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
         if let supportDir = appSupportDir {
             let appNodePath = supportDir.appendingPathComponent("SpeechToCode/bin/node").path
             if FileManager.default.fileExists(atPath: appNodePath) {
                 nodeDirectory = URL(fileURLWithPath: appNodePath).deletingLastPathComponent()
-                print("Found Node.js at app's default location: \(nodeDirectory?.path ?? "unknown")")
+                print("🔍 Found Node.js at app's installation directory")
                 return
             }
         }
         
-        // If we can't find it from our app, check the homebrew installation
+        // Common Homebrew locations as fallback
         let homebrewPaths = [
             "/opt/homebrew/bin/node",
             "/usr/local/bin/node"
@@ -48,12 +49,12 @@ final class NpmPackageInstallerTests: XCTestCase {
         for path in homebrewPaths {
             if FileManager.default.fileExists(atPath: path) {
                 nodeDirectory = URL(fileURLWithPath: path).deletingLastPathComponent()
-                print("Found Node.js at Homebrew location: \(nodeDirectory?.path ?? "unknown")")
+                print("🔍 Found Node.js at system location: \(path)")
                 return
             }
         }
         
-        // As a last resort, try the system path
+        // If we still can't find it, check the PATH
         do {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/which")
@@ -69,12 +70,12 @@ final class NpmPackageInstallerTests: XCTestCase {
                let nodePath = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
                !nodePath.isEmpty {
                 nodeDirectory = URL(fileURLWithPath: nodePath).deletingLastPathComponent()
-                print("Found Node.js in system PATH: \(nodeDirectory?.path ?? "unknown")")
+                print("🔍 Found Node.js in system PATH")
             } else {
-                print("Unable to find Node.js in any location")
+                print("⚠️ Unable to find Node.js in any location")
             }
         } catch {
-            print("Error finding Node.js: \(error.localizedDescription)")
+            print("⚠️ Error finding Node.js: \(error.localizedDescription)")
         }
     }
     
@@ -85,7 +86,7 @@ final class NpmPackageInstallerTests: XCTestCase {
         // Clean up the temporary directory
         if let tempDirectory = tempDirectory {
             try? FileManager.default.removeItem(at: tempDirectory)
-            print("Removed temporary directory: \(tempDirectory.path)")
+            print("🧹 Removed temporary directory")
         }
         
         tempDirectory = nil
@@ -106,6 +107,8 @@ final class NpmPackageInstallerTests: XCTestCase {
         let packageName = "is-odd"
         let version = "3.0.1"
         
+        print("📦 Starting test for package installation: \(packageName)@\(version)")
+        
         // Try to install with retries
         var installSuccess = false
         var attempts = 0
@@ -113,7 +116,7 @@ final class NpmPackageInstallerTests: XCTestCase {
         
         while !installSuccess && attempts < maxAttempts {
             attempts += 1
-            print("Installation attempt #\(attempts)")
+            print("🔄 Installation attempt #\(attempts)")
             
             // Wait between attempts
             if attempts > 1 {
@@ -128,8 +131,10 @@ final class NpmPackageInstallerTests: XCTestCase {
                 workingDirectory: tempDirectory
             )
             
-            if !installSuccess {
-                print("Attempt #\(attempts) failed: \(npmInstaller.error ?? "Unknown error")")
+            if installSuccess {
+                print("✅ Installation successful")
+            } else {
+                print("❌ Installation attempt #\(attempts) failed: \(npmInstaller.error ?? "Unknown error")")
             }
         }
         
@@ -137,6 +142,7 @@ final class NpmPackageInstallerTests: XCTestCase {
         
         if installSuccess {
             // Verify it was installed correctly
+            print("🔍 Verifying package installation")
             let checkResult = await npmInstaller.checkPackageInstalled(
                 packageName: packageName,
                 nodeDirectory: nodeDirectory,
@@ -146,13 +152,20 @@ final class NpmPackageInstallerTests: XCTestCase {
             XCTAssertTrue(checkResult.installed, "Package not found after installation")
             XCTAssertEqual(checkResult.version, version, "Installed version doesn't match requested version")
             
+            if checkResult.installed {
+                print("✅ Verification successful: \(packageName)@\(checkResult.version ?? "unknown")")
+            } else {
+                print("❌ Verification failed")
+            }
+            
             // Clean up - uninstall the package with retries
+            print("🧹 Cleaning up - uninstalling package")
             var uninstallSuccess = false
             attempts = 0
             
             while !uninstallSuccess && attempts < maxAttempts {
                 attempts += 1
-                print("Uninstallation attempt #\(attempts)")
+                print("🔄 Uninstallation attempt #\(attempts)")
                 
                 // Wait between attempts
                 if attempts > 1 {
@@ -165,8 +178,10 @@ final class NpmPackageInstallerTests: XCTestCase {
                     workingDirectory: tempDirectory
                 )
                 
-                if !uninstallSuccess {
-                    print("Uninstall attempt #\(attempts) failed: \(npmInstaller.error ?? "Unknown error")")
+                if uninstallSuccess {
+                    print("✅ Uninstallation successful")
+                } else {
+                    print("❌ Uninstall attempt #\(attempts) failed: \(npmInstaller.error ?? "Unknown error")")
                 }
             }
             

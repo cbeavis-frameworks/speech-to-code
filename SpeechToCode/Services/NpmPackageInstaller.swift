@@ -63,7 +63,7 @@ public class NpmPackageInstaller {
     private let mutexActor = MutexActor()
     
     /// Delay between npm operations in seconds to avoid "tracker already exists" errors
-    private let operationDelay: TimeInterval = 1.0
+    private let operationDelay: TimeInterval = 1.5
     
     public init() {}
     
@@ -115,14 +115,12 @@ public class NpmPackageInstaller {
         arguments.append(packageSpec)
         
         // Add environment variables
-        let pathExtension = "PATH=\(nodeDirectory.path):/usr/local/bin:/usr/bin:/bin"
         var env = ProcessInfo.processInfo.environment
         env["PATH"] = nodeDirectory.path + ":" + (env["PATH"] ?? "")
         
-        // Update status
-        status.send("Installing \(packageSpec)...")
+        // Execute npm install command with minimal logging
+        AppLogger.log(AppLogger.installation, level: .info, message: "Installing npm package: \(packageSpec)")
         
-        // Execute npm install command
         let result = await ProcessRunner.run(
             npmPath,
             arguments: arguments,
@@ -133,13 +131,12 @@ public class NpmPackageInstaller {
         
         // Check for success
         if result.succeeded {
-            status.send("Successfully installed \(packageSpec)")
+            AppLogger.log(AppLogger.installation, level: .info, message: "Successfully installed npm package: \(packageSpec)")
             error = nil
             return true
         } else {
             let errorMessage = result.stderr.isEmpty ? "Exit code: \(result.exitCode)" : result.stderr
             error = errorMessage
-            status.send("Failed to install \(packageSpec): \(errorMessage)")
             AppLogger.log(AppLogger.installation, level: .error, message: "Failed to install npm package: \(packageName). Error: \(errorMessage)")
             return false
         }
@@ -184,14 +181,12 @@ public class NpmPackageInstaller {
         }
         
         // Add environment variables
-        let pathExtension = "PATH=\(nodeDirectory.path):/usr/local/bin:/usr/bin:/bin"
         var env = ProcessInfo.processInfo.environment
         env["PATH"] = nodeDirectory.path + ":" + (env["PATH"] ?? "")
         
-        // Update status
-        status.send("Checking if \(packageName) is installed...")
+        // Execute npm list command with minimal logging
+        AppLogger.log(AppLogger.installation, level: .info, message: "Checking if \(packageName) is installed")
         
-        // Execute npm list command
         let result = await ProcessRunner.run(
             npmPath,
             arguments: arguments,
@@ -204,7 +199,6 @@ public class NpmPackageInstaller {
             // npm list can return 1 even on partial success
             let errorMessage = result.stderr.isEmpty ? "Exit code: \(result.exitCode)" : result.stderr
             error = errorMessage
-            status.send("Failed to check if \(packageName) is installed: \(errorMessage)")
             AppLogger.log(AppLogger.installation, level: .error, message: "Failed to check npm package: \(packageName). Error: \(errorMessage)")
             return PackageCheckResult(installed: false)
         }
@@ -221,10 +215,10 @@ public class NpmPackageInstaller {
                let packageInfo = dependencies[packageName] as? [String: Any],
                let version = packageInfo["version"] as? String {
                 
-                status.send("\(packageName) is installed (version \(version))")
+                AppLogger.log(AppLogger.installation, level: .info, message: "Package \(packageName) is installed (version \(version))")
                 return PackageCheckResult(installed: true, version: version)
             } else {
-                status.send("\(packageName) is not installed")
+                AppLogger.log(AppLogger.installation, level: .info, message: "Package \(packageName) is not installed")
                 return PackageCheckResult(installed: false)
             }
         } catch {
@@ -276,10 +270,9 @@ public class NpmPackageInstaller {
         var env = ProcessInfo.processInfo.environment
         env["PATH"] = nodeDirectory.path + ":" + (env["PATH"] ?? "")
         
-        // Update status
-        status.send("Uninstalling \(packageName)...")
+        // Execute npm uninstall command with minimal logging
+        AppLogger.log(AppLogger.installation, level: .info, message: "Uninstalling npm package: \(packageName)")
         
-        // Execute npm uninstall command
         let result = await ProcessRunner.run(
             npmPath,
             arguments: arguments,
@@ -290,13 +283,12 @@ public class NpmPackageInstaller {
         
         // Check for success
         if result.succeeded {
-            status.send("Successfully uninstalled \(packageName)")
+            AppLogger.log(AppLogger.installation, level: .info, message: "Successfully uninstalled npm package: \(packageName)")
             error = nil
             return true
         } else {
             let errorMessage = result.stderr.isEmpty ? "Exit code: \(result.exitCode)" : result.stderr
             error = errorMessage
-            status.send("Failed to uninstall \(packageName): \(errorMessage)")
             AppLogger.log(AppLogger.installation, level: .error, message: "Failed to uninstall npm package: \(packageName). Error: \(errorMessage)")
             return false
         }
