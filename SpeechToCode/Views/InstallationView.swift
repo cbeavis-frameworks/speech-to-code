@@ -55,14 +55,20 @@ struct InstallationView: View {
                         .font(.title2)
                         .fontWeight(.semibold)
                     
-                    if let nodeVersion = state.nodeVersion {
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text("Node.js: \(nodeVersion)")
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("Node.js: \(state.nodeVersion ?? "Unknown")")
+                        
+                        if state.claudeInstalled {
+                            Text("Claude: \(state.claudeVersion ?? "Unknown")")
+                                .foregroundColor(.green)
+                        } else {
+                            Text("Claude: Not installed")
+                                .foregroundColor(.orange)
                         }
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .padding()
                     }
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding()
                     
                     Button(action: {
                         Task {
@@ -91,7 +97,7 @@ struct InstallationView: View {
                             }
                         }
                     }) {
-                        Text("Install Node.js")
+                        Text("Install Node.js and Claude")
                             .frame(minWidth: 200)
                     }
                     .buttonStyle(.borderedProminent)

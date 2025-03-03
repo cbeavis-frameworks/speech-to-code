@@ -24,6 +24,12 @@ class InstallationManager: ObservableObject {
     /// Node.js installer
     private let nodeInstaller = NodeInstaller()
     
+    /// npm Package Installer
+    private let npmInstaller = NpmPackageInstaller()
+    
+    /// Name of the Claude package to install
+    private let claudePackageName = "@claude/cli"
+    
     /// Model context
     private var modelContext: ModelContext?
     
@@ -74,31 +80,34 @@ class InstallationManager: ObservableObject {
         try? FileManager.default.applicationSupportDirectory().appendingPathComponent("bin", isDirectory: true)
     }
     
-    /// Perform the installation of Node.js
+    /// Perform the full installation of Node.js and Claude package
     @MainActor
     func performInstallation() async -> Bool {
-        guard let installDir = NodeInstaller.getCommonInstallDirectory() else {
-            updateStatus(status: .failed, message: "Failed to get installation directory")
-            AppLogger.log(AppLogger.installation, level: .error, message: "Failed to get installation directory")
-            return false
-        }
-        
-        // Make sure we have a valid model context before continuing
-        guard self.modelContext != nil else {
-            AppLogger.log(AppLogger.installation, level: .error, message: "No model context available for installation, please reload the view")
-            updateStatus(status: .failed, message: "Database error: Please restart the app")
+        // Check if installation is already running
+        guard !isInstalling else {
+            AppLogger.log(AppLogger.installation, level: .warning, message: "Installation already in progress")
             return false
         }
         
         isInstalling = true
         overallProgress = 0.0
-        AppLogger.log(AppLogger.installation, level: .info, message: "Starting installation process to \(installDir.path)")
+        
+        // Get the installation directory
+        guard let installDir = binDirectory else {
+            updateStatus(status: .failed, message: "Failed to determine installation directory")
+            AppLogger.log(AppLogger.installation, level: .error, message: "Failed to determine installation directory")
+            isInstalling = false
+            return false
+        }
+        
+        // Create or use existing installation state
+        let installationState = loadOrCreateInstallationState(modelContext: modelContext!)
         
         // Create observers for progress updates
         setupProgressObservers()
         
-        // Install Node.js
-        updateStatus(status: .inProgress, message: "Installing Node.js...")
+        // 1. Install Node.js (70% of progress)
+        updateStatus(status: .inProgress, message: "Installing Node.js...", progress: 0.0)
         
         guard let nodePath = await nodeInstaller.installNode(to: installDir) else {
             updateStatus(status: .failed, message: "Node.js installation failed: \(nodeInstaller.error ?? "Unknown error")")
@@ -139,62 +148,75 @@ class InstallationManager: ObservableObject {
         // Log npm version for verification
         if npmVersionResult.succeeded {
             AppLogger.log(AppLogger.installation, level: .info, message: "npm verification successful. Version: \(npmVersion)")
-            updateStatus(status: .success, message: "Node.js and npm installed successfully! Node: \(nodeVersion), npm: \(npmVersion)", progress: 1.0)
+            updateStatus(status: .inProgress, message: "Node.js and npm installed successfully! Node: \(nodeVersion), npm: \(npmVersion)", progress: 0.7)
+            
+            // Update the installation state for Node.js
+            await updateInstallationState(
+                nodeInstalled: true,
+                nodePath: nodePath,
+                nodeVersion: nodeVersion
+            )
+            
+            // 2. Install Claude package (remaining 30% of progress)
+            updateStatus(status: .inProgress, message: "Installing Claude package...", progress: 0.7)
+            
+            // Install the Claude package globally
+            let nodeBinDir = URL(fileURLWithPath: nodePath).deletingLastPathComponent()
+            let claudeInstalled = await npmInstaller.installPackage(
+                packageSpec: claudePackageName, 
+                global: true, 
+                nodeDirectory: nodeBinDir,
+                workingDirectory: nil
+            )
+            
+            if claudeInstalled {
+                // Check the installed version
+                let claudeCheck = await npmInstaller.checkPackageInstalled(
+                    packageName: claudePackageName.replacingOccurrences(of: "@", with: "").replacingOccurrences(of: "/", with: ""),
+                    global: true,
+                    nodeDirectory: nodeBinDir
+                )
+                
+                let claudeVersion = claudeCheck.version ?? "Unknown"
+                
+                // Update the installation state for Claude
+                await updateInstallationState(
+                    nodeInstalled: true,
+                    nodePath: nodePath,
+                    nodeVersion: nodeVersion,
+                    claudeInstalled: true,
+                    claudeVersion: claudeVersion
+                )
+                
+                updateStatus(status: .success, message: "Installation complete! Node.js \(nodeVersion) and Claude \(claudeVersion) installed successfully!", progress: 1.0)
+                AppLogger.log(AppLogger.installation, level: .info, message: "Claude package installed successfully. Version: \(claudeVersion)")
+            } else {
+                // Update with Node.js success but Claude failure
+                await updateInstallationState(
+                    nodeInstalled: true,
+                    nodePath: nodePath,
+                    nodeVersion: nodeVersion,
+                    claudeInstalled: false,
+                    claudeVersion: nil
+                )
+                
+                updateStatus(status: .partialSuccess, message: "Node.js installed successfully but Claude installation failed: \(npmInstaller.error ?? "Unknown error")", progress: 0.7)
+                AppLogger.log(AppLogger.installation, level: .error, message: "Claude package installation failed: \(npmInstaller.error ?? "Unknown error")")
+            }
         } else {
             AppLogger.log(AppLogger.installation, level: .warning, message: "npm verification failed: \(npmVersionResult.stderr)")
-            updateStatus(status: .success, message: "Node.js installed successfully but npm verification failed. Node: \(nodeVersion)", progress: 1.0)
-        }
-        
-        // Force a model context check
-        if self.modelContext == nil {
-            AppLogger.log(AppLogger.installation, level: .error, message: "Model context became nil during installation. This shouldn't happen.")
-            // Try to continue anyway, but log the error
-        }
+            updateStatus(status: .partialSuccess, message: "Node.js installed successfully but npm verification failed. Node: \(nodeVersion)", progress: 0.7)
             
-        // Update installation state with versions and paths
-        await updateInstallationStateDirectly(
-            nodeInstalled: true,
-            nodePath: nodePath,
-            nodeVersion: nodeVersion,
-            statusMessage: "Node.js installation completed successfully!"
-        )
+            // Update the installation state with just Node.js
+            await updateInstallationState(
+                nodeInstalled: true,
+                nodePath: nodePath,
+                nodeVersion: nodeVersion
+            )
+        }
         
         isInstalling = false
-        return true
-    }
-    
-    /// Directly update the installation state to ensure it works even if model context is lost
-    @MainActor
-    private func updateInstallationStateDirectly(
-        nodeInstalled: Bool,
-        nodePath: String,
-        nodeVersion: String,
-        statusMessage: String
-    ) async {
-        // Update NodePath singleton
-        if nodeInstalled {
-            NodePath.shared.setNodeDetails(path: nodePath, version: nodeVersion)
-            AppLogger.log(AppLogger.installation, level: .debug, message: "Updated NodePath singleton from installation")
-        } else {
-            NodePath.shared.clearNodeDetails()
-            AppLogger.log(AppLogger.installation, level: .debug, message: "Cleared NodePath singleton")
-        }
-        
-        // First try the normal way
-        updateInstallationState(
-            nodeInstalled: nodeInstalled,
-            nodePath: nodePath,
-            nodeVersion: nodeVersion,
-            statusMessage: statusMessage
-        )
-        
-        // If we didn't have a model context, try to force-update the database directly
-        if self.modelContext == nil {
-            AppLogger.log(AppLogger.installation, level: .warning, message: "Using manual database update as fallback")
-            
-            // You could add code here to directly access the database if needed
-            // For now we'll just warn about the error
-        }
+        return installationState.nodeInstalled
     }
     
     /// Set up progress observers for the installers
@@ -202,8 +224,19 @@ class InstallationManager: ObservableObject {
         // Using Tasks to observe progress values
         Task { @MainActor in
             for await progress in nodeInstaller.$progress.values {
-                if progress > 0 && progress < 1.0 {
-                    overallProgress = progress
+                if isInstalling && progress > 0 && progress < 1.0 {
+                    // Node.js installation is 70% of total progress
+                    overallProgress = progress * 0.7
+                }
+            }
+        }
+        
+        // Subscribe to npm installer status messages
+        Task { @MainActor in
+            for await statusMsg in npmInstaller.status.values {
+                if !statusMsg.isEmpty {
+                    // Update status message from npm installer
+                    statusMessage = statusMsg
                 }
             }
         }
@@ -255,7 +288,62 @@ class InstallationManager: ObservableObject {
         }
     }
     
-    /// Update the installation state in the model context
+    /// Update installation state directly with detailed parameters
+    @MainActor
+    private func updateInstallationState(
+        nodeInstalled: Bool,
+        nodePath: String?,
+        nodeVersion: String?,
+        claudeInstalled: Bool = false,
+        claudeVersion: String? = nil
+    ) {
+        guard let modelContext = self.modelContext else {
+            AppLogger.log(AppLogger.installation, level: .error, message: "No model context available for updating installation state")
+            return
+        }
+        
+        do {
+            let descriptor = FetchDescriptor<InstallationState>()
+            if let installationState = try modelContext.fetch(descriptor).first {
+                // Update state properties
+                installationState.nodeInstalled = nodeInstalled
+                installationState.nodePath = nodePath
+                installationState.nodeVersion = nodeVersion
+                installationState.lastVerified = Date()
+                
+                // Update Claude properties
+                installationState.claudeInstalled = claudeInstalled
+                installationState.claudeVersion = claudeVersion
+                
+                if nodeInstalled, let nodePath = nodePath {
+                    // Set installation directory to the parent of bin directory
+                    installationState.installationDirectory = URL(fileURLWithPath: nodePath)
+                        .deletingLastPathComponent() // remove 'node'
+                        .deletingLastPathComponent() // remove 'bin'
+                        .path
+                    
+                    // Update NodePath singleton
+                    NodePath.shared.setNodeDetails(path: nodePath, version: nodeVersion)
+                } else {
+                    // Clear NodePath singleton if node is not installed
+                    NodePath.shared.clearNodeDetails()
+                }
+                
+                do {
+                    try modelContext.save()
+                    AppLogger.log(AppLogger.installation, level: .info, message: "Installation state updated: Node: \(nodeInstalled ? "Installed" : "Not installed"), Claude: \(claudeInstalled ? "Installed" : "Not installed")")
+                } catch {
+                    AppLogger.log(AppLogger.installation, level: .error, message: "Failed to save installation state: \(error.localizedDescription)")
+                }
+            } else {
+                AppLogger.log(AppLogger.installation, level: .error, message: "No installation state found in model context")
+            }
+        } catch {
+            AppLogger.log(AppLogger.installation, level: .error, message: "Failed to fetch installation state: \(error.localizedDescription)")
+        }
+    }
+    
+    /// Update installation state in the model context
     @MainActor
     private func updateInstallationState(
         nodeInstalled: Bool? = nil,
@@ -333,6 +421,8 @@ class InstallationManager: ObservableObject {
             AppLogger.log(AppLogger.installation, level: .info, message: "Installation successful: \(message)")
         case .failed:
             AppLogger.log(AppLogger.installation, level: .error, message: "Installation failed: \(message)")
+        case .partialSuccess:
+            AppLogger.log(AppLogger.installation, level: .warning, message: "Installation partially successful: \(message)")
         }
     }
 }
@@ -342,4 +432,5 @@ enum InstallationStatus {
     case inProgress
     case success
     case failed
+    case partialSuccess
 }

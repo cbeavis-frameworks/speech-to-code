@@ -26,6 +26,12 @@ final class InstallationState {
     /// Version information
     var nodeVersion: String?
     
+    /// Indicates if Claude package is installed
+    var claudeInstalled: Bool
+    
+    /// Claude package version
+    var claudeVersion: String?
+    
     /// Installation status message
     var statusMessage: String?
     
@@ -35,6 +41,8 @@ final class InstallationState {
         lastVerified: Date? = nil,
         installationDirectory: String? = nil,
         nodeVersion: String? = nil,
+        claudeInstalled: Bool = false,
+        claudeVersion: String? = nil,
         statusMessage: String? = nil
     ) {
         self.nodeInstalled = nodeInstalled
@@ -42,6 +50,8 @@ final class InstallationState {
         self.lastVerified = lastVerified
         self.installationDirectory = installationDirectory
         self.nodeVersion = nodeVersion
+        self.claudeInstalled = claudeInstalled
+        self.claudeVersion = claudeVersion
         self.statusMessage = statusMessage
     }
     
@@ -50,6 +60,8 @@ final class InstallationState {
         nodeInstalled = false
         nodePath = nil
         lastVerified = nil
+        claudeInstalled = false
+        claudeVersion = nil
         statusMessage = "Installation reset"
     }
 }
