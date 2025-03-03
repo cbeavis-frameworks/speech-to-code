@@ -12,7 +12,52 @@ final class NpmPackageInstallerTests: XCTestCase {
         
         npmInstaller = NpmPackageInstaller()
         
-        // For tests, we'll try to find node in the system path
+        // First try to find Node.js using our app's installation state
+        do {
+            // Create a model container for reading the installation state
+            let modelContainer = try ModelContainer(for: InstallationState.self)
+            let modelContext = modelContainer.mainContext
+            let descriptor = FetchDescriptor<InstallationState>()
+            
+            if let installationState = try modelContext.fetch(descriptor).first,
+               installationState.nodeInstalled,
+               let nodePath = installationState.nodePath {
+                // Found Node.js installed by our app
+                nodeDirectory = URL(fileURLWithPath: nodePath).deletingLastPathComponent()
+                print("Found Node.js from app installation: \(nodeDirectory?.path ?? "unknown")")
+                return
+            }
+        } catch {
+            print("Error accessing installation state: \(error.localizedDescription)")
+            // Continue to try alternate methods
+        }
+        
+        // If we can't find it from our app, check the homebrew installation
+        let homebrewPaths = [
+            "/opt/homebrew/bin/node",
+            "/usr/local/bin/node"
+        ]
+        
+        for path in homebrewPaths {
+            if FileManager.default.fileExists(atPath: path) {
+                nodeDirectory = URL(fileURLWithPath: path).deletingLastPathComponent()
+                print("Found Node.js at Homebrew location: \(nodeDirectory?.path ?? "unknown")")
+                return
+            }
+        }
+        
+        // Check the app's default installation directory
+        let appSupportDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+        if let supportDir = appSupportDir {
+            let appNodePath = supportDir.appendingPathComponent("SpeechToCode/bin/node").path
+            if FileManager.default.fileExists(atPath: appNodePath) {
+                nodeDirectory = URL(fileURLWithPath: appNodePath).deletingLastPathComponent()
+                print("Found Node.js at app's default location: \(nodeDirectory?.path ?? "unknown")")
+                return
+            }
+        }
+        
+        // As a last resort, try the system path
         do {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/which")
@@ -28,9 +73,9 @@ final class NpmPackageInstallerTests: XCTestCase {
                let nodePath = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
                !nodePath.isEmpty {
                 nodeDirectory = URL(fileURLWithPath: nodePath).deletingLastPathComponent()
-                print("Found Node.js at: \(nodeDirectory?.path ?? "unknown")")
+                print("Found Node.js in system PATH: \(nodeDirectory?.path ?? "unknown")")
             } else {
-                print("Unable to find Node.js in system path")
+                print("Unable to find Node.js in any location")
             }
         } catch {
             print("Error finding Node.js: \(error.localizedDescription)")
