@@ -27,12 +27,14 @@ class ProcessRunner {
     ///   - arguments: Arguments for the command
     ///   - currentDirectoryPath: The directory to run the command in
     ///   - environment: Environment variables to set
+    ///   - timeout: Optional timeout in seconds (nil means no timeout)
     /// - Returns: The result of running the process
     static func run(
         _ command: String,
         arguments: [String] = [],
         currentDirectoryPath: String? = nil,
-        environment: [String: String]? = nil
+        environment: [String: String]? = nil,
+        timeout: TimeInterval? = nil
     ) async -> ProcessResult {
         let process = Process()
         let stdoutPipe = Pipe()
@@ -50,6 +52,10 @@ class ProcessRunner {
         if let environment = environment {
             let envString = environment.map { key, value in "\(key)=\(value)" }.joined(separator: ", ")
             AppLogger.log(AppLogger.process, level: .debug, message: "Environment variables: \(envString)")
+        }
+        
+        if let timeout = timeout {
+            AppLogger.log(AppLogger.process, level: .debug, message: "Process will timeout after \(timeout) seconds")
         }
         
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
@@ -75,33 +81,94 @@ class ProcessRunner {
             AppLogger.log(AppLogger.process, level: .debug, message: "Starting process")
             try process.run()
             
-            AppLogger.log(AppLogger.process, level: .debug, message: "Waiting for process to complete")
-            process.waitUntilExit()
-            
-            let stdoutData = try stdoutPipe.fileHandleForReading.readToEnd() ?? Data()
-            let stderrData = try stderrPipe.fileHandleForReading.readToEnd() ?? Data()
-            
-            let stdout = String(decoding: stdoutData, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
-            let stderr = String(decoding: stderrData, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
-            
-            // Log the result
-            let exitCode = process.terminationStatus
-            AppLogger.log(AppLogger.process, level: exitCode == 0 ? .info : .error, 
-                         message: "Process completed with exit code: \(exitCode)")
-            
-            if !stdout.isEmpty {
-                AppLogger.log(AppLogger.process, level: .debug, message: "Standard output: \(stdout)")
+            // Handle timeout if specified
+            if let timeout = timeout {
+                return await withCheckedContinuation { continuation in
+                    // Create a background task for the timeout
+                    Task {
+                        try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                        if process.isRunning {
+                            AppLogger.log(AppLogger.process, level: .warning, message: "Process timed out after \(timeout) seconds")
+                            process.terminate()
+                            
+                            // Get any output that might be available
+                            let stdoutData = try? stdoutPipe.fileHandleForReading.readToEnd() ?? Data()
+                            let stderrData = try? stderrPipe.fileHandleForReading.readToEnd() ?? Data()
+                            
+                            let stdout = String(decoding: stdoutData ?? Data(), as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+                            let stderr = String(decoding: stderrData ?? Data(), as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+                            
+                            continuation.resume(returning: ProcessResult(
+                                stdout: stdout,
+                                stderr: "Process timed out after \(timeout) seconds. Partial stderr: \(stderr)",
+                                exitCode: -1
+                            ))
+                        }
+                    }
+                    
+                    // Create a background task for normal process completion
+                    Task {
+                        AppLogger.log(AppLogger.process, level: .debug, message: "Waiting for process to complete")
+                        process.waitUntilExit()
+                        
+                        if !Task.isCancelled {
+                            let stdoutData = try? stdoutPipe.fileHandleForReading.readToEnd() ?? Data()
+                            let stderrData = try? stderrPipe.fileHandleForReading.readToEnd() ?? Data()
+                            
+                            let stdout = String(decoding: stdoutData ?? Data(), as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+                            let stderr = String(decoding: stderrData ?? Data(), as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+                            
+                            // Log the result
+                            let exitCode = process.terminationStatus
+                            AppLogger.log(AppLogger.process, level: exitCode == 0 ? .info : .error, 
+                                        message: "Process completed with exit code: \(exitCode)")
+                            
+                            if !stdout.isEmpty {
+                                AppLogger.log(AppLogger.process, level: .debug, message: "Standard output: \(stdout)")
+                            }
+                            
+                            if !stderr.isEmpty {
+                                AppLogger.log(AppLogger.process, level: .warning, message: "Standard error: \(stderr)")
+                            }
+                            
+                            continuation.resume(returning: ProcessResult(
+                                stdout: stdout,
+                                stderr: stderr,
+                                exitCode: exitCode
+                            ))
+                        }
+                    }
+                }
+            } else {
+                // No timeout, wait for completion normally
+                AppLogger.log(AppLogger.process, level: .debug, message: "Waiting for process to complete")
+                process.waitUntilExit()
+                
+                let stdoutData = try stdoutPipe.fileHandleForReading.readToEnd() ?? Data()
+                let stderrData = try stderrPipe.fileHandleForReading.readToEnd() ?? Data()
+                
+                let stdout = String(decoding: stdoutData, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+                let stderr = String(decoding: stderrData, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+                
+                // Log the result
+                let exitCode = process.terminationStatus
+                AppLogger.log(AppLogger.process, level: exitCode == 0 ? .info : .error, 
+                             message: "Process completed with exit code: \(exitCode)")
+                
+                if !stdout.isEmpty {
+                    AppLogger.log(AppLogger.process, level: .debug, message: "Standard output: \(stdout)")
+                }
+                
+                if !stderr.isEmpty {
+                    AppLogger.log(AppLogger.process, level: .warning, message: "Standard error: \(stderr)")
+                }
+                
+                return ProcessResult(
+                    stdout: stdout,
+                    stderr: stderr,
+                    exitCode: exitCode
+                )
             }
-            
-            if !stderr.isEmpty {
-                AppLogger.log(AppLogger.process, level: .warning, message: "Standard error: \(stderr)")
-            }
-            
-            return ProcessResult(
-                stdout: stdout,
-                stderr: stderr,
-                exitCode: exitCode
-            )
         } catch {
             AppLogger.log(AppLogger.process, level: .error, message: "Failed to run process: \(error.localizedDescription)")
             return ProcessResult(
