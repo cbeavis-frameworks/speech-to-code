@@ -8,7 +8,7 @@
 import Foundation
 import OSLog
 
-/// A utility for running shell commands and getting their output
+/// Utility class to run external processes
 class ProcessRunner {
     /// Result of running a process
     struct ProcessResult {
@@ -16,22 +16,28 @@ class ProcessRunner {
         let stderr: String
         let exitCode: Int32
         
+        /// Whether the process completed successfully
         var succeeded: Bool {
             return exitCode == 0
         }
+        
+        /// Whether the process failed
+        var failed: Bool {
+            return !succeeded
+        }
     }
     
-    /// Run a shell command and return its output
+    /// Run an external process and return its result
     /// - Parameters:
-    ///   - command: The command to run
-    ///   - arguments: Arguments for the command
-    ///   - currentDirectoryPath: The directory to run the command in
-    ///   - environment: Environment variables to set
-    ///   - timeout: Optional timeout in seconds (nil means no timeout)
-    /// - Returns: The result of running the process
+    ///   - executableURL: URL to the executable
+    ///   - arguments: Arguments to pass to the process
+    ///   - currentDirectoryPath: Optional working directory
+    ///   - environment: Optional environment variables
+    ///   - timeout: Optional timeout in seconds
+    /// - Returns: Process result including stdout, stderr, and exit code
     static func run(
-        _ command: String,
-        arguments: [String] = [],
+        _ executablePath: String,
+        arguments: [String],
         currentDirectoryPath: String? = nil,
         environment: [String: String]? = nil,
         timeout: TimeInterval? = nil
@@ -40,33 +46,17 @@ class ProcessRunner {
         let stdoutPipe = Pipe()
         let stderrPipe = Pipe()
         
-        // Log the command being executed
-        let commandArgs = arguments.joined(separator: " ")
-        let commandString = "\(command) \(commandArgs)"
-        AppLogger.log(AppLogger.process, level: .info, message: "Executing command: \(commandString)")
+        // Configure executable and arguments
+        process.executableURL = URL(fileURLWithPath: executablePath)
+        process.arguments = arguments
         
-        if let currentDirectoryPath = currentDirectoryPath {
-            AppLogger.log(AppLogger.process, level: .debug, message: "Working directory: \(currentDirectoryPath)")
+        // Configure working directory if specified
+        if let dirPath = currentDirectoryPath {
+            process.currentDirectoryURL = URL(fileURLWithPath: dirPath)
         }
         
+        // Configure environment variables if specified
         if let environment = environment {
-            let envString = environment.map { key, value in "\(key)=\(value)" }.joined(separator: ", ")
-            AppLogger.log(AppLogger.process, level: .debug, message: "Environment variables: \(envString)")
-        }
-        
-        if let timeout = timeout {
-            AppLogger.log(AppLogger.process, level: .debug, message: "Process will timeout after \(timeout) seconds")
-        }
-        
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = [command] + arguments
-        
-        if let currentDirectoryPath = currentDirectoryPath {
-            process.currentDirectoryURL = URL(fileURLWithPath: currentDirectoryPath)
-        }
-        
-        if let environment = environment {
-            // Merge with existing environment
             var processEnvironment = ProcessInfo.processInfo.environment
             for (key, value) in environment {
                 processEnvironment[key] = value
@@ -78,7 +68,6 @@ class ProcessRunner {
         process.standardError = stderrPipe
         
         do {
-            AppLogger.log(AppLogger.process, level: .debug, message: "Starting process")
             try process.run()
             
             // Handle timeout if specified
@@ -108,7 +97,6 @@ class ProcessRunner {
                     
                     // Create a background task for normal process completion
                     Task {
-                        AppLogger.log(AppLogger.process, level: .debug, message: "Waiting for process to complete")
                         process.waitUntilExit()
                         
                         if !Task.isCancelled {
@@ -118,17 +106,10 @@ class ProcessRunner {
                             let stdout = String(decoding: stdoutData ?? Data(), as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
                             let stderr = String(decoding: stderrData ?? Data(), as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
                             
-                            // Log the result
+                            // Log only critical details, not full output
                             let exitCode = process.terminationStatus
-                            AppLogger.log(AppLogger.process, level: exitCode == 0 ? .info : .error, 
-                                        message: "Process completed with exit code: \(exitCode)")
-                            
-                            if !stdout.isEmpty {
-                                AppLogger.log(AppLogger.process, level: .debug, message: "Standard output: \(stdout)")
-                            }
-                            
-                            if !stderr.isEmpty {
-                                AppLogger.log(AppLogger.process, level: .warning, message: "Standard error: \(stderr)")
+                            if exitCode != 0 {
+                                AppLogger.log(AppLogger.process, level: .error, message: "Process failed with exit code: \(exitCode)")
                             }
                             
                             continuation.resume(returning: ProcessResult(
@@ -141,7 +122,6 @@ class ProcessRunner {
                 }
             } else {
                 // No timeout, wait for completion normally
-                AppLogger.log(AppLogger.process, level: .debug, message: "Waiting for process to complete")
                 process.waitUntilExit()
                 
                 let stdoutData = try stdoutPipe.fileHandleForReading.readToEnd() ?? Data()
@@ -150,17 +130,10 @@ class ProcessRunner {
                 let stdout = String(decoding: stdoutData, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
                 let stderr = String(decoding: stderrData, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
                 
-                // Log the result
+                // Log only critical details, not full output
                 let exitCode = process.terminationStatus
-                AppLogger.log(AppLogger.process, level: exitCode == 0 ? .info : .error, 
-                             message: "Process completed with exit code: \(exitCode)")
-                
-                if !stdout.isEmpty {
-                    AppLogger.log(AppLogger.process, level: .debug, message: "Standard output: \(stdout)")
-                }
-                
-                if !stderr.isEmpty {
-                    AppLogger.log(AppLogger.process, level: .warning, message: "Standard error: \(stderr)")
+                if exitCode != 0 {
+                    AppLogger.log(AppLogger.process, level: .error, message: "Process failed with exit code: \(exitCode)")
                 }
                 
                 return ProcessResult(

@@ -7,10 +7,25 @@
 
 import SwiftUI
 import SwiftData
+import OSLog
 
 @main
 struct SpeechToCodeApp: App {
     @StateObject private var appStateManager = AppStateManager()
+    
+    init() {
+        // Configure logging settings
+        #if DEBUG
+        // Enable console logging only in debug builds
+        AppLogger.enableConsolePrinting(true)
+        #else
+        // Disable console logging in release builds
+        AppLogger.enableConsolePrinting(false)
+        #endif
+        
+        // Disable verbose context info to reduce log noise
+        AppLogger.enableVerboseContext(false)
+    }
     
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([

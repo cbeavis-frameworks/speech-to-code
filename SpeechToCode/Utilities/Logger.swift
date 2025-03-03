@@ -22,28 +22,54 @@ class AppLogger {
         case debug, info, warning, error, critical
     }
     
+    // Flag to enable/disable console printing (in addition to OSLog)
+    private static var isConsolePrintingEnabled = false
+    
+    // Flag to enable/disable file and function context printing
+    private static var isVerboseContextEnabled = false
+    
+    /// Set whether console printing is enabled
+    static func enableConsolePrinting(_ enabled: Bool) {
+        isConsolePrintingEnabled = enabled
+    }
+    
+    /// Set whether verbose context (file, line, function) is included
+    static func enableVerboseContext(_ enabled: Bool) {
+        isVerboseContextEnabled = enabled
+    }
+    
     /// Log a message with the given logger and level
     static func log(_ logger: Logger, level: Level, message: String, file: String = #file, function: String = #function, line: Int = #line) {
-        let fileName = URL(fileURLWithPath: file).lastPathComponent
-        let contextInfo = "[\(fileName):\(line) \(function)]"
+        let contextInfo: String
+        
+        if isVerboseContextEnabled {
+            let fileName = URL(fileURLWithPath: file).lastPathComponent
+            contextInfo = "[\(fileName):\(line) \(function)]"
+        } else {
+            contextInfo = ""
+        }
+        
+        let finalMessage = isVerboseContextEnabled ? "\(contextInfo) \(message)" : message
         
         switch level {
         case .debug:
-            logger.debug("\(contextInfo) \(message)")
+            logger.debug("\(finalMessage)")
         case .info:
-            logger.info("\(contextInfo) \(message)")
+            logger.info("\(finalMessage)")
         case .warning:
-            logger.warning("\(contextInfo) \(message)")
+            logger.warning("\(finalMessage)")
         case .error:
-            logger.error("\(contextInfo) \(message)")
+            logger.error("\(finalMessage)")
         case .critical:
-            logger.critical("\(contextInfo) \(message)")
+            logger.critical("\(finalMessage)")
         }
         
-        // Print to console as well to make debugging easier
-        let levelString = level.description
-        let timestamp = Date().formatted(date: .omitted, time: .standard)
-        print("[\(timestamp)] [\(levelString)] \(contextInfo) \(message)")
+        // Print to console only if enabled
+        if isConsolePrintingEnabled {
+            let levelString = level.description
+            let timestamp = Date().formatted(date: .omitted, time: .standard)
+            print("[\(timestamp)] [\(levelString)] \(finalMessage)")
+        }
     }
 }
 
@@ -53,7 +79,7 @@ extension AppLogger.Level: CustomStringConvertible {
         switch self {
         case .debug: return "DEBUG"
         case .info: return "INFO"
-        case .warning: return "WARNING"
+        case .warning: return "WARNING" 
         case .error: return "ERROR"
         case .critical: return "CRITICAL"
         }
