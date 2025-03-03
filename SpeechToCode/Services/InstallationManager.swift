@@ -28,7 +28,7 @@ class InstallationManager: ObservableObject {
     private let npmInstaller = NpmPackageInstaller()
     
     /// Name of the Claude package to install
-    private let claudePackageName = "@claude/cli"
+    private let claudePackageName = "@anthropic-ai/claude-code"
     
     /// Model context
     private var modelContext: ModelContext?
