@@ -28,7 +28,7 @@ final class NodeInstallerTests: XCTestCase {
     override func tearDownWithError() throws {
         // Clean up test directory after test
         if FileManager.default.fileExists(atPath: testDirectory.path) {
-            try? FileManager.default.removeItem(at: testDirectory)
+            try FileManager.default.removeItem(at: testDirectory)
             print("🧹 Removed test directory: \(testDirectory.path)")
         }
         
@@ -122,7 +122,7 @@ final class NodeInstallerTests: XCTestCase {
         process.standardError = pipe
         
         do {
-            try process.run()
+            try await process.run()
             process.waitUntilExit()
             return process.terminationStatus == 0
         } catch {
