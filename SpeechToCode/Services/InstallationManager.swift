@@ -70,9 +70,9 @@ class InstallationManager: ObservableObject {
     /// Perform the installation of Node.js
     @MainActor
     func performInstallation() async -> Bool {
-        guard let binDirectory = self.binDirectory else {
-            updateStatus(status: .failed, message: "Failed to get bin directory")
-            AppLogger.log(AppLogger.installation, level: .error, message: "Failed to get bin directory")
+        guard let installDir = NodeInstaller.getCommonInstallDirectory() else {
+            updateStatus(status: .failed, message: "Failed to get installation directory")
+            AppLogger.log(AppLogger.installation, level: .error, message: "Failed to get installation directory")
             return false
         }
         
@@ -85,7 +85,7 @@ class InstallationManager: ObservableObject {
         
         isInstalling = true
         overallProgress = 0.0
-        AppLogger.log(AppLogger.installation, level: .info, message: "Starting installation process to \(binDirectory.path)")
+        AppLogger.log(AppLogger.installation, level: .info, message: "Starting installation process to \(installDir.path)")
         
         // Create observers for progress updates
         setupProgressObservers()
@@ -93,7 +93,7 @@ class InstallationManager: ObservableObject {
         // Install Node.js
         updateStatus(status: .inProgress, message: "Installing Node.js...")
         
-        guard let nodePath = await nodeInstaller.installNode(to: binDirectory) else {
+        guard let nodePath = await nodeInstaller.installNode(to: installDir) else {
             updateStatus(status: .failed, message: "Node.js installation failed: \(nodeInstaller.error ?? "Unknown error")")
             AppLogger.log(AppLogger.installation, level: .error, message: "Node.js installation failed: \(nodeInstaller.error ?? "Unknown error")")
             isInstalling = false

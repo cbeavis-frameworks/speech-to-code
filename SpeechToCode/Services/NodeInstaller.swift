@@ -243,4 +243,35 @@ class NodeInstaller: ObservableObject {
         
         AppLogger.log(AppLogger.node, level: error == nil ? .info : .error, message: "[\(status)] \(message) \(error ?? "")")
     }
+    
+    /// Returns the common directory where Node.js installations should be stored
+    /// This provides a consistent location across app launches
+    static func getCommonInstallDirectory() -> URL? {
+        do {
+            // Use Application Support directory as a consistent location
+            let applicationSupportDir = try FileManager.default.url(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask,
+                appropriateFor: nil,
+                create: true
+            )
+            
+            // Create a dedicated directory for SpeechToCode
+            let appDir = applicationSupportDir.appendingPathComponent("SpeechToCode")
+            
+            // Create a bin directory for executables
+            let binDir = appDir.appendingPathComponent("bin")
+            
+            // Ensure the directory exists
+            if !FileManager.default.fileExists(atPath: binDir.path) {
+                try FileManager.default.createDirectory(at: binDir, withIntermediateDirectories: true)
+                AppLogger.log(AppLogger.node, level: .debug, message: "Created common install directory: \(binDir.path)")
+            }
+            
+            return binDir
+        } catch {
+            AppLogger.log(AppLogger.node, level: .error, message: "Failed to create common install directory: \(error.localizedDescription)")
+            return nil
+        }
+    }
 }
