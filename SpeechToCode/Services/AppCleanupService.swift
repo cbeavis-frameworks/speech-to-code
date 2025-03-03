@@ -26,13 +26,16 @@ class AppCleanupService {
         }
         
         AppLogger.log(AppLogger.app, level: .info, message: "🧹 Performing app cleanup on launch")
+        print("🚨 CLEANING UP APP DATA ON LAUNCH")
         
         // 1. Clean the installation directory (removes Node.js and all npm packages)
         do {
             try FileManager.default.cleanInstallationDirectory()
             AppLogger.log(AppLogger.app, level: .info, message: "✓ Cleaned installation directory")
+            print("✅ Cleaned installation directory")
         } catch {
             AppLogger.log(AppLogger.app, level: .error, message: "Failed to clean installation directory: \(error.localizedDescription)")
+            print("❌ Failed to clean installation directory: \(error.localizedDescription)")
         }
         
         // 2. Reset all installation state data
@@ -47,17 +50,21 @@ class AppCleanupService {
             
             try modelContext.save()
             AppLogger.log(AppLogger.app, level: .info, message: "✓ Reset all installation states")
+            print("✅ Reset all installation states")
         } catch {
             AppLogger.log(AppLogger.app, level: .error, message: "Failed to reset installation states: \(error.localizedDescription)")
+            print("❌ Failed to reset installation states: \(error.localizedDescription)")
         }
         
         // 3. Clear NodePath singleton
         NodePath.shared.clearNodeDetails()
         AppLogger.log(AppLogger.app, level: .info, message: "✓ Cleared NodePath singleton")
+        print("✅ Cleared NodePath singleton")
         
         // 4. Clear any app preferences if needed
         // Note: Add more cleanup steps as needed in the future
         
         AppLogger.log(AppLogger.app, level: .info, message: "🧹 App cleanup completed. App is in fresh state.")
+        print("🚨 APP CLEANUP COMPLETED")
     }
 }

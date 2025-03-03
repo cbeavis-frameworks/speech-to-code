@@ -92,4 +92,18 @@ class AppStateManager: ObservableObject {
             try? modelContext.save()
         }
     }
+    
+    /// Update installation status (used by AppCleanupService)
+    @MainActor
+    func updateInstallationStatus(_ completed: Bool) {
+        guard let modelContext = modelContext else { return }
+        
+        let descriptor = FetchDescriptor<AppState>()
+        if let state = try? modelContext.fetch(descriptor).first {
+            state.installationCompleted = completed
+            self.installationCompleted = completed
+            
+            try? modelContext.save()
+        }
+    }
 }

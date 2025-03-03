@@ -11,6 +11,7 @@ import SwiftData
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var appStateManager: AppStateManager
+    @State private var showCleanupConfirmation = false
     
     var body: some View {
         Group {
@@ -22,6 +23,29 @@ struct ContentView: View {
             } else {
                 MainAppView()
             }
+        }
+        .onAppear {
+            // In debug mode, offer to clean data
+            #if DEBUG
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                showCleanupConfirmation = true
+            }
+            #endif
+        }
+        .alert("Clean App Data?", isPresented: $showCleanupConfirmation) {
+            Button("Yes, Clean Data", role: .destructive) {
+                Task {
+                    print("🚨 MANUALLY CLEANING APP DATA")
+                    await AppCleanupService.shared.cleanupOnLaunch(modelContext: modelContext)
+                    // Force app to show installation view
+                    appStateManager.updateInstallationStatus(false)
+                }
+            }
+            Button("No, Continue", role: .cancel) {
+                // Do nothing, continue with existing data
+            }
+        } message: {
+            Text("This will remove all Node.js and package installations, requiring a fresh install. This is useful for testing.")
         }
     }
 }
