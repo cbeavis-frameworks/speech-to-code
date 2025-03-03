@@ -24,14 +24,7 @@ struct InstallationProgressView: View {
                 .font(.headline)
             
             if let error = error, !error.isEmpty {
-                Text(error)
-                    .font(.footnote)
-                    .foregroundColor(.red)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding()
-                    .background(Color.red.opacity(0.1))
-                    .cornerRadius(8)
+                // Error message is hidden
             }
         }
         .padding()
