@@ -18,6 +18,9 @@ class NpmPackageInstaller {
     /// Whether installation is in progress
     private(set) var isInstalling = false
     
+    // Lock to prevent concurrent npm operations
+    private let operationLock = NSLock()
+    
     // MARK: - Public Methods
     
     /// Install an npm package with the specified version
@@ -72,6 +75,10 @@ class NpmPackageInstaller {
             arguments.append(packageName)
         }
         
+        // Wait for any ongoing npm operations to complete
+        operationLock.lock()
+        defer { operationLock.unlock() }
+        
         // Run the npm install command
         AppLogger.log(AppLogger.installation, level: .info, message: "Installing npm package: \(packageName) \(version ?? "latest")")
         progressSubject.send(0.3)
@@ -82,6 +89,9 @@ class NpmPackageInstaller {
             environment: env,
             timeout: timeout
         )
+        
+        // Wait a short time before continuing
+        try? await Task.sleep(nanoseconds: 500_000_000) // 500ms delay
         
         // Update progress
         progressSubject.send(0.8)
@@ -165,6 +175,10 @@ class NpmPackageInstaller {
         // Add the package name
         arguments.append(packageName)
         
+        // Wait for any ongoing npm operations to complete
+        operationLock.lock()
+        defer { operationLock.unlock() }
+        
         // Run the npm uninstall command
         AppLogger.log(AppLogger.installation, level: .info, message: "Uninstalling npm package: \(packageName)")
         progressSubject.send(0.3)
@@ -174,6 +188,9 @@ class NpmPackageInstaller {
             arguments: arguments,
             environment: env
         )
+        
+        // Wait a short time before continuing
+        try? await Task.sleep(nanoseconds: 500_000_000) // 500ms delay
         
         // Update progress
         progressSubject.send(0.8)
@@ -236,12 +253,19 @@ class NpmPackageInstaller {
         // Build the list command
         let arguments = ["list", global ? "-g" : "", "--depth=0"]
         
+        // Wait for any ongoing npm operations to complete
+        operationLock.lock()
+        defer { operationLock.unlock() }
+        
         // Run the npm list command
         let result = await ProcessRunner.run(
             npmPath,
             arguments: arguments.filter { !$0.isEmpty },
             environment: env
         )
+        
+        // Wait a short time before continuing
+        try? await Task.sleep(nanoseconds: 500_000_000) // 500ms delay
         
         if result.succeeded {
             // Check if the package is in the list output
