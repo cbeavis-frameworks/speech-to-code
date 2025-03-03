@@ -2,39 +2,40 @@
 
 The SpeechToCode project is currently being developed on the following branch:
 
-**Branch name:** `feature/npm-package-installer`
+**Branch name:** `feature/claude-code-cli`
 
 ## Branch Purpose
 
-This branch contains improvements to the npm package installation functionality, including:
+This branch focuses on implementing integration with the Claude Code CLI to enable voice-to-code functionality:
 
-1. Reduced logging verbosity and elimination of duplicate messages
-2. Implementation of a common installation directory for Node.js
-3. Addition of comprehensive NodeInstaller tests
-4. Using Claude Code CLI as the test package
+1. Creating a ClaudeCodeService to interface with the CLI
+2. Implementing voice command processing and parsing
+3. Setting up project context management for accurate code generation
+4. Adding error handling and retries for CLI interactions
+5. Creating a user-friendly UI for voice interaction 
 
 ## Pending Work
 
 Before merging this branch back to main, the following items should be completed:
 
-1. ✅ Reduce console output verbosity
-2. ✅ Eliminate duplicate messages
-3. ✅ Update test package to use Claude Code CLI
-4. ✅ Create tests for NodeInstaller
-5. ✅ Implement common installation directory
+1. ⬜ Create ClaudeCodeService for interacting with Claude Code CLI
+2. ⬜ Implement voice command processing pipeline
+3. ⬜ Create project context management system
+4. ⬜ Add error handling for CLI communication failures
+5. ⬜ Develop voice control UI components
+6. ⬜ Write comprehensive tests for the service
 
 ## How to Use
 
 To check out this branch:
 
 ```bash
-git checkout feature/npm-package-installer
+git checkout feature/claude-code-cli
 ```
 
 To merge this branch to main once all tests pass:
 
 ```bash
 git checkout main
-git merge feature/npm-package-installer
+git merge feature/claude-code-cli
 git push
-```
