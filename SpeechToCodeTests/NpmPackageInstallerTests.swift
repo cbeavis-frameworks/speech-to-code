@@ -27,6 +27,13 @@ final class NpmPackageInstallerTests: XCTestCase {
         // Initialize package.json in the temp directory
         try "{\n  \"name\": \"npm-test\",\n  \"version\": \"1.0.0\"\n}".write(to: tempPath.appendingPathComponent("package.json"), atomically: true, encoding: .utf8)
         
+        // First check NodePath singleton for the installation path
+        if let nodeBinDir = NodePath.shared.nodeBinDirectory {
+            print("📂 Using Node.js from NodePath singleton: \(nodeBinDir.path)")
+            nodeDirectory = nodeBinDir
+            return
+        }
+        
         // Get the Node.js installation directory from the app's InstallationState
         // We'll do this by checking common installation locations since we can't easily
         // access SwiftData in tests without MainActor complications

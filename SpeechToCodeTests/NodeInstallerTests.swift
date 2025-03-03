@@ -35,7 +35,7 @@ final class NodeInstallerTests: XCTestCase {
         nodeInstaller = nil
         testDirectory = nil
         
-        super.tearDownWithError()
+        try super.tearDownWithError()
     }
     
     func testDownloadAndInstallNodeJs() async throws {
@@ -56,7 +56,7 @@ final class NodeInstallerTests: XCTestCase {
         print("🔄 Starting Node.js installation test")
         
         // 1. Test installation
-        let nodePath = try await nodeInstaller.installNode(to: testDirectory)
+        let nodePath = await nodeInstaller.installNode(to: testDirectory)
         
         // Verify installation succeeded and returned a valid path
         XCTAssertNotNil(nodePath, "Node.js installation failed: \(nodeInstaller.error ?? "Unknown error")")
@@ -70,7 +70,7 @@ final class NodeInstallerTests: XCTestCase {
             
             if nodeExists {
                 // 3. Verify node works by checking its version
-                let result = try await ProcessRunner.run(nodePath, arguments: ["--version"])
+                let result = await ProcessRunner.run(nodePath, arguments: ["--version"])
                 XCTAssertTrue(result.succeeded, "Node.js version check failed: \(result.stderr)")
                 XCTAssertFalse(result.stdout.isEmpty, "Node.js version output was empty")
                 
@@ -90,13 +90,39 @@ final class NodeInstallerTests: XCTestCase {
                 
                 print("✅ Installation state successfully created and verified")
                 
-                // 5. Verify npm is also installed
+                // 5. Verify NodePath singleton has been updated with the path
+                XCTAssertEqual(NodePath.shared.nodePath, nodePath, "NodePath singleton does not have the correct node path")
+                XCTAssertEqual(NodePath.shared.nodeVersion, result.stdout.trimmingCharacters(in: .whitespacesAndNewlines), "NodePath singleton does not have the correct node version")
+                XCTAssertEqual(NodePath.shared.nodeBinDirectory?.path, URL(fileURLWithPath: nodePath).deletingLastPathComponent().path, "NodePath singleton does not have the correct bin directory")
+                
+                print("✅ NodePath singleton successfully updated with installation details")
+                
+                // 6. Verify npm is also installed
                 let npmPath = URL(fileURLWithPath: nodePath).deletingLastPathComponent().appendingPathComponent("npm").path
                 let npmExists = FileManager.default.fileExists(atPath: npmPath)
                 XCTAssertTrue(npmExists, "npm executable not found at expected path")
                 
                 if npmExists {
-                    let npmResult = try await ProcessRunner.run(npmPath, arguments: ["--version"])
+                    // Create environment variables with proper PATH and NODE variables
+                    var npmEnvironment = ProcessInfo.processInfo.environment
+                    let nodeBinDir = URL(fileURLWithPath: nodePath).deletingLastPathComponent().path
+                    
+                    // Add node directory to PATH for npm to find node
+                    npmEnvironment["PATH"] = "\(nodeBinDir):\(npmEnvironment["PATH"] ?? "")"
+                    
+                    // Explicitly set the NODE variable to the full path
+                    npmEnvironment["NODE"] = nodePath
+                    
+                    print("🌐 Setting NODE environment: \(nodePath)")
+                    print("🌐 Setting PATH environment: \(nodeBinDir):\(npmEnvironment["PATH"] ?? "")")
+                    
+                    // Run npm with the proper environment
+                    let npmResult = await ProcessRunner.run(
+                        npmPath, 
+                        arguments: ["--version"],
+                        environment: npmEnvironment
+                    )
+                    
                     XCTAssertTrue(npmResult.succeeded, "npm version check failed: \(npmResult.stderr)")
                     XCTAssertFalse(npmResult.stdout.isEmpty, "npm version output was empty")
                     print("✅ npm executable verified: version \(npmResult.stdout.trimmingCharacters(in: .whitespacesAndNewlines))")

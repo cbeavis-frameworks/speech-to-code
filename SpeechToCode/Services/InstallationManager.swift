@@ -44,6 +44,13 @@ class InstallationManager: ObservableObject {
         
         if let state = installationStates?.first {
             AppLogger.log(AppLogger.installation, level: .info, message: "Found existing installation state: Node: \(state.nodeInstalled ? "Installed" : "Not installed")")
+            
+            // If node is installed, update the NodePath singleton
+            if state.nodeInstalled, let nodePath = state.nodePath {
+                NodePath.shared.setNodeDetails(path: nodePath, version: state.nodeVersion)
+                AppLogger.log(AppLogger.installation, level: .debug, message: "Updated NodePath singleton from existing installation state")
+            }
+            
             return state
         } else {
             AppLogger.log(AppLogger.installation, level: .info, message: "Creating new installation state")
@@ -164,6 +171,15 @@ class InstallationManager: ObservableObject {
         nodeVersion: String,
         statusMessage: String
     ) async {
+        // Update NodePath singleton
+        if nodeInstalled {
+            NodePath.shared.setNodeDetails(path: nodePath, version: nodeVersion)
+            AppLogger.log(AppLogger.installation, level: .debug, message: "Updated NodePath singleton from installation")
+        } else {
+            NodePath.shared.clearNodeDetails()
+            AppLogger.log(AppLogger.installation, level: .debug, message: "Cleared NodePath singleton")
+        }
+        
         // First try the normal way
         updateInstallationState(
             nodeInstalled: nodeInstalled,
@@ -201,20 +217,38 @@ class InstallationManager: ObservableObject {
             return false
         }
         
+        guard let modelContext = self.modelContext else {
+            AppLogger.log(AppLogger.installation, level: .error, message: "No model context available for cleaning installation")
+            return false
+        }
+        
         do {
             AppLogger.log(AppLogger.installation, level: .info, message: "Cleaning installation directory: \(binDirectory.path)")
+            
+            // Remove installation directory and its contents
             try FileManager.default.cleanInstallationDirectory()
             
             // Update the installation state
-            updateInstallationState(
-                nodeInstalled: false,
-                nodePath: nil,
-                nodeVersion: nil,
-                statusMessage: "Installation cleaned"
-            )
-            
-            AppLogger.log(AppLogger.installation, level: .info, message: "Installation state updated after cleaning")
-            return true
+            let descriptor = FetchDescriptor<InstallationState>()
+            if let installationState = try modelContext.fetch(descriptor).first {
+                // Reset the installation state
+                installationState.reset()
+                
+                // Clear the NodePath singleton
+                NodePath.shared.clearNodeDetails()
+                
+                do {
+                    try modelContext.save()
+                    AppLogger.log(AppLogger.installation, level: .info, message: "Installation state updated after cleaning")
+                    return true
+                } catch {
+                    AppLogger.log(AppLogger.installation, level: .error, message: "Failed to save installation state after cleaning: \(error.localizedDescription)")
+                    return false
+                }
+            } else {
+                AppLogger.log(AppLogger.installation, level: .error, message: "No installation state found in model context")
+                return false
+            }
         } catch {
             AppLogger.log(AppLogger.installation, level: .error, message: "Failed to clean installation directory: \(error.localizedDescription)")
             return false

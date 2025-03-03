@@ -102,7 +102,7 @@ class NodeInstaller: ObservableObject {
             
             // Remove quarantine attribute from the downloaded file
             let _ = await ProcessRunner.run(
-                "xattr",
+                "/usr/bin/xattr",
                 arguments: ["-d", "com.apple.quarantine", tarballURL.path]
             )
             
@@ -113,7 +113,7 @@ class NodeInstaller: ObservableObject {
             
             // Extract using tar
             let result = await ProcessRunner.run(
-                "tar",
+                "/usr/bin/tar",
                 arguments: ["-xzf", tarballURL.path, "-C", workDir.path]
             )
             
@@ -173,7 +173,7 @@ class NodeInstaller: ObservableObject {
             // Set executable permissions for bin directory contents
             let binDir = nodeBinDir.appendingPathComponent("bin")
             let recursiveChmodResult = await ProcessRunner.run(
-                "chmod",
+                "/bin/chmod",
                 arguments: ["-R", "+x", binDir.path]
             )
             
@@ -185,7 +185,7 @@ class NodeInstaller: ObservableObject {
             
             // Remove quarantine attribute from all executables
             let removeQuarantineFromBinResult = await ProcessRunner.run(
-                "xattr",
+                "/usr/bin/xattr",
                 arguments: ["-rd", "com.apple.quarantine", binDir.path]
             )
             
@@ -218,6 +218,9 @@ class NodeInstaller: ObservableObject {
             
             let installedVersion = versionResult.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
             AppLogger.log(AppLogger.node, level: .info, message: "Successfully installed Node.js \(installedVersion) to \(nodeBinDir.path)")
+            
+            // Save the node path to the NodePath singleton for access by other components
+            NodePath.shared.setNodeDetails(path: nodePath, version: installedVersion)
             
             // Clean up temporary directory
             try FileManager.default.removeItem(at: workDir)
