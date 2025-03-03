@@ -54,9 +54,11 @@ struct SpeechToCodeApp: App {
                     // Load app state when the app appears
                     let _ = appStateManager.loadOrCreateAppState(modelContext: sharedModelContainer.mainContext)
                     
-                    // Clean up app data on launch if enabled
+                    // Clean up app data on launch if enabled (in debug mode)
                     Task {
                         await AppCleanupService.shared.cleanupOnLaunch(modelContext: sharedModelContainer.mainContext)
+                        // Force app to show installation view by updating state
+                        appStateManager.updateInstallationStatus(false)
                     }
                 }
         }
