@@ -14,12 +14,18 @@ final class NpmPackageInstallerTests: XCTestCase {
         
         // First try to find Node.js using our app's installation state
         do {
-            // Create a model container for reading the installation state
+            // Need to access SwiftData on the main actor
             let modelContainer = try ModelContainer(for: InstallationState.self)
-            let modelContext = modelContainer.mainContext
-            let descriptor = FetchDescriptor<InstallationState>()
             
-            if let installationState = try modelContext.fetch(descriptor).first,
+            // Get installation state on the main thread
+            let installState = try MainActor.run {
+                let modelContext = modelContainer.mainContext
+                let descriptor = FetchDescriptor<InstallationState>()
+                return try modelContext.fetch(descriptor).first
+            }
+            
+            // Check if we found a valid node installation
+            if let installationState = installState,
                installationState.nodeInstalled,
                let nodePath = installationState.nodePath {
                 // Found Node.js installed by our app
