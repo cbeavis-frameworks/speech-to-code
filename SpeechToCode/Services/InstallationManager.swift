@@ -101,7 +101,14 @@ class InstallationManager: ObservableObject {
         }
         
         // Create or use existing installation state
-        let installationState = loadOrCreateInstallationState(modelContext: modelContext ?? ModelContext())
+        guard let modelContext = self.modelContext else {
+            updateStatus(status: .failed, message: "No model context available for installation")
+            AppLogger.log(AppLogger.installation, level: .error, message: "No model context available for installation")
+            isInstalling = false
+            return false
+        }
+        
+        let installationState = loadOrCreateInstallationState(modelContext: modelContext)
         
         // Create observers for progress updates
         setupProgressObservers()
