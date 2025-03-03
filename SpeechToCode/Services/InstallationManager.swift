@@ -100,16 +100,8 @@ class InstallationManager: ObservableObject {
             return false
         }
         
-        // Make sure we have a model context
-        guard let modelContext = self.modelContext else {
-            updateStatus(status: .failed, message: "No model context available for installation")
-            AppLogger.log(AppLogger.installation, level: .error, message: "No model context available for installation")
-            isInstalling = false
-            return false
-        }
-        
         // Create or use existing installation state
-        let installationState = loadOrCreateInstallationState(modelContext: modelContext)
+        let installationState = loadOrCreateInstallationState(modelContext: modelContext ?? ModelContext())
         
         // Create observers for progress updates
         setupProgressObservers()
@@ -168,21 +160,22 @@ class InstallationManager: ObservableObject {
             // 2. Install Claude package (remaining 30% of progress)
             updateStatus(status: .inProgress, message: "Installing Claude package...", progress: 0.7)
             
-            // Install the Claude package globally
+            // Install the Claude package locally
             let nodeBinDir = URL(fileURLWithPath: nodePath).deletingLastPathComponent()
             let claudeInstalled = await npmInstaller.installPackage(
                 packageName: claudePackageName, 
-                global: true, 
+                global: false, 
                 nodeDirectory: nodeBinDir,
-                workingDirectory: nil
+                workingDirectory: binDirectory
             )
             
             if claudeInstalled {
                 // Check the installed version
                 let claudeCheck = await npmInstaller.checkPackageInstalled(
-                    packageName: claudePackageName.replacingOccurrences(of: "@", with: "").replacingOccurrences(of: "/", with: ""),
-                    global: true,
-                    nodeDirectory: nodeBinDir
+                    packageName: claudePackageName,
+                    global: false,
+                    nodeDirectory: nodeBinDir,
+                    workingDirectory: binDirectory
                 )
                 
                 let claudeVersion = claudeCheck.version ?? "Unknown"
