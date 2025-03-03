@@ -18,9 +18,13 @@ struct SpeechToCodeApp: App {
         #if DEBUG
         // Enable console logging only in debug builds
         AppLogger.enableConsolePrinting(true)
+        // Enable automatic cleanup on app launch for development
+        AppCleanupService.cleanOnLaunch = true
         #else
         // Disable console logging in release builds
         AppLogger.enableConsolePrinting(false)
+        // Disable cleanup in production
+        AppCleanupService.cleanOnLaunch = false
         #endif
         
         // Disable verbose context info to reduce log noise
@@ -49,6 +53,11 @@ struct SpeechToCodeApp: App {
                 .onAppear {
                     // Load app state when the app appears
                     let _ = appStateManager.loadOrCreateAppState(modelContext: sharedModelContainer.mainContext)
+                    
+                    // Clean up app data on launch if enabled
+                    Task {
+                        await AppCleanupService.shared.cleanupOnLaunch(modelContext: sharedModelContainer.mainContext)
+                    }
                 }
         }
         .modelContainer(sharedModelContainer)
