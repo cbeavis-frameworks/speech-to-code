@@ -56,7 +56,7 @@ final class NodeInstallerTests: XCTestCase {
         print("🔄 Starting Node.js installation test")
         
         // 1. Test installation
-        let nodePath = await nodeInstaller.installNode(to: testDirectory)
+        let nodePath = try await nodeInstaller.installNode(to: testDirectory)
         
         // Verify installation succeeded and returned a valid path
         XCTAssertNotNil(nodePath, "Node.js installation failed: \(nodeInstaller.error ?? "Unknown error")")
@@ -70,7 +70,7 @@ final class NodeInstallerTests: XCTestCase {
             
             if nodeExists {
                 // 3. Verify node works by checking its version
-                let result = await ProcessRunner.run(nodePath, arguments: ["--version"])
+                let result = try await ProcessRunner.run(nodePath, arguments: ["--version"])
                 XCTAssertTrue(result.succeeded, "Node.js version check failed: \(result.stderr)")
                 XCTAssertFalse(result.stdout.isEmpty, "Node.js version output was empty")
                 
@@ -96,7 +96,7 @@ final class NodeInstallerTests: XCTestCase {
                 XCTAssertTrue(npmExists, "npm executable not found at expected path")
                 
                 if npmExists {
-                    let npmResult = await ProcessRunner.run(npmPath, arguments: ["--version"])
+                    let npmResult = try await ProcessRunner.run(npmPath, arguments: ["--version"])
                     XCTAssertTrue(npmResult.succeeded, "npm version check failed: \(npmResult.stderr)")
                     XCTAssertFalse(npmResult.stdout.isEmpty, "npm version output was empty")
                     print("✅ npm executable verified: version \(npmResult.stdout.trimmingCharacters(in: .whitespacesAndNewlines))")
@@ -113,15 +113,10 @@ final class NodeInstallerTests: XCTestCase {
     
     private func hasInternetConnection() async -> Bool {
         // Simple connectivity test - try to resolve a reliable domain
-        do {
-            let result = await ProcessRunner.run(
-                "/usr/bin/nslookup",
-                arguments: ["nodejs.org"]
-            )
-            return result.succeeded
-        } catch {
-            print("⚠️ Network connectivity check failed: \(error.localizedDescription)")
-            return false
-        }
+        let result = await ProcessRunner.run(
+            "/usr/bin/nslookup",
+            arguments: ["nodejs.org"]
+        )
+        return result.succeeded
     }
 }
