@@ -20,12 +20,13 @@ class ClaudeCodeService: ObservableObject {
     /// Error message, if any
     @Published var errorMessage: String?
     
-    /// The Node.js installation directory
-    private var nodeDirectory: String?
+    /// Path to the bin directory containing Node.js executables
+    private var nodeBinPath: String?
     
-    /// Initialize the service with the Node.js installation directory
-    init(nodeDirectory: String? = nil) {
-        self.nodeDirectory = nodeDirectory
+    /// Initialize the service with the path to the bin directory containing Node.js executables
+    /// - Parameter nodeBinPath: Path to the directory containing node, npm, and npx executables
+    init(nodeBinPath: String? = nil) {
+        self.nodeBinPath = nodeBinPath
     }
     
     /// Send a message to Claude Code CLI
@@ -42,10 +43,10 @@ class ClaudeCodeService: ObservableObject {
             terminalOutput += "\n> \(message)\n"
         }
         
-        // Make sure we have a valid node directory
-        guard let nodeDir = nodeDirectory, !nodeDir.isEmpty else {
+        // Make sure we have a valid node bin directory path
+        guard let binDir = nodeBinPath, !binDir.isEmpty else {
             await MainActor.run {
-                let errorMsg = "Error: Node.js installation directory is not set"
+                let errorMsg = "Error: Node.js bin directory path is not set"
                 errorMessage = errorMsg
                 terminalOutput += "\n\(errorMsg)\n"
                 terminalOutput += "Please ensure Node.js is properly installed before using Claude Code.\n"
@@ -54,8 +55,8 @@ class ClaudeCodeService: ObservableObject {
             return false
         }
         
-        // Define the npx path based on the node installation
-        let npxPath = "\(nodeDir)/bin/npx"
+        // Define the npx path based on the node bin directory
+        let npxPath = "\(binDir)/npx"
         
         // Check if the npx executable exists
         let fileManager = FileManager.default
@@ -101,10 +102,10 @@ class ClaudeCodeService: ObservableObject {
             terminalOutput += "\nChecking Claude Code installation...\n"
         }
         
-        // Make sure we have a valid node directory
-        guard let nodeDir = nodeDirectory, !nodeDir.isEmpty else {
+        // Make sure we have a valid node bin directory path
+        guard let binDir = nodeBinPath, !binDir.isEmpty else {
             await MainActor.run {
-                let errorMsg = "Error: Node.js installation directory is not set"
+                let errorMsg = "Error: Node.js bin directory path is not set"
                 errorMessage = errorMsg
                 terminalOutput += "\(errorMsg)\n"
                 terminalOutput += "Please ensure Node.js is properly installed before using Claude Code.\n"
@@ -113,8 +114,8 @@ class ClaudeCodeService: ObservableObject {
             return false
         }
         
-        // Define the npx path based on the node installation
-        let npxPath = "\(nodeDir)/bin/npx"
+        // Define the npx path based on the node bin directory
+        let npxPath = "\(binDir)/npx"
         
         await MainActor.run {
             terminalOutput += "Using npx at: \(npxPath)\n"

@@ -159,7 +159,15 @@ struct MainAppView: View {
             // Load the latest installation state
             let descriptor = FetchDescriptor<InstallationState>()
             let state = try? modelContext.fetch(descriptor).first
-            ClaudeTerminalView(nodeDirectory: state?.nodePath)
+            
+            // Get the node bin directory path from the nodePath
+            var nodeBinPath: String? = nil
+            if let nodePath = state?.nodePath, !nodePath.isEmpty {
+                // Extract the bin directory from the node executable path
+                nodeBinPath = URL(fileURLWithPath: nodePath).deletingLastPathComponent().path
+            }
+            
+            ClaudeTerminalView(nodeBinPath: nodeBinPath)
         }
         .onAppear {
             // Load the installation state
