@@ -4,7 +4,7 @@ This document provides technical details about the installation process implemen
 
 ## Overview
 
-SpeechToCode handles installation of its dependencies automatically, providing users with a seamless setup experience. The primary dependency is Node.js, which is required to run the Claude Code CLI tool that powers the code generation capabilities.
+SpeechToCode handles installation of its dependencies automatically, providing users with a seamless setup experience. The primary dependencies are Node.js and the Claude Code CLI, which power the code generation capabilities.
 
 ## Installation Components
 
@@ -17,21 +17,40 @@ The `NodeInstaller` service handles the installation of Node.js:
 - Extracts and installs Node.js to the application's support directory
 - Verifies the installation by checking the npm version
 
-### 2. npm Package Installation
+### 2. Claude Code Package Installation
 
-The `NpmPackageInstaller` service handles the installation of required npm packages:
+The `InstallationManager` ensures that the Claude Code CLI is properly installed:
 
-- Installs packages with specific versions as needed
-- Provides retry mechanisms for reliability
-- Handles locking to prevent concurrent npm operations
-- Verifies installations to ensure they were successful
+- Creates a package.json in the installation directory
+- Installs the Claude Code package locally (not globally)
+- Validates the installation with version checks
+- Sets up proper paths for terminal interaction with Claude Code
+
+### 3. Environment Setup
+
+The `ClaudeCodeService` handles proper environment configuration:
+
+- Sets up PATH to include the Node.js bin directory
+- Configures NODE_PATH to find local packages
+- Ensures terminal sessions can locate and use the Claude Code CLI
+- Provides fallback searching to handle different installation locations
 
 ## Installation Path
 
-Node.js is installed in the application's support directory:
+Dependencies are installed in the application's support directory:
 
 ```
-~/Library/Application Support/SpeechToCode/bin/
+~/Library/Application Support/com.theframeworks.SpeechToCode/bin/
+```
+
+The Node.js binary is located at:
+```
+~/Library/Application Support/com.theframeworks.SpeechToCode/bin/node-18.17.1/bin/node
+```
+
+The Claude Code package is installed at:
+```
+~/Library/Application Support/com.theframeworks.SpeechToCode/bin/node-18.17.1/lib/node_modules/@anthropic-ai/claude-code
 ```
 
 This ensures a consistent environment for the app regardless of whether the user has Node.js installed elsewhere on their system.
@@ -50,10 +69,10 @@ This cleanup happens automatically when the app launches in DEBUG mode, allowing
 
 The `InstallationState` model tracks:
 
-- Whether Node.js is installed
+- Whether Node.js and Claude Code are installed
 - The path to the Node.js binary
-- The installation directory
-- The installed Node.js version
+- The path to the Claude Code package directory
+- The installed Node.js and Claude Code versions
 
 This state is persisted using SwiftData and used to determine if installation steps need to be performed when the app launches.
 
@@ -71,21 +90,12 @@ Node.js installation requires internet connectivity to download the binary. If t
 
 The Node.js installation requires approximately 100MB of free disk space. Installation will fail if there is insufficient space.
 
-### 4. Concurrent npm Operations
+### 4. Package Location Mismatch
 
-npm can have issues with concurrent operations. The app implements locking mechanisms to prevent this, with a 1.5-second delay between operations to ensure stability.
-
-## Manual Installation
-
-While the app handles installation automatically, users can also manually install dependencies:
-
-1. Install Node.js from the official website (https://nodejs.org/)
-2. Install the Claude Code CLI: `npm install -g @anthropic-ai/claude-code@0.2.30`
-
-The app will detect these manual installations if they are in the standard locations.
+If the Claude Code CLI cannot be found at runtime, it's usually because there's a mismatch between where the package was installed and where the terminal is looking for it. The app now handles this by configuring NODE_PATH to include multiple potential locations.
 
 ## npm Package Details
 
 The following npm packages are used by the application:
 
-- `@anthropic-ai/claude-code`: The Claude Code CLI tool that powers the code generation and voice command processing. This package is installed locally within the app's bin directory rather than globally.
+- `@anthropic-ai/claude-code`: The Claude Code CLI tool that powers the code generation and voice command processing. This package is installed locally within the node installation directory rather than globally.

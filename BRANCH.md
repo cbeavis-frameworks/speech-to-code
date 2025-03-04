@@ -14,16 +14,25 @@ This branch focuses on implementing integration with the Claude Code CLI to enab
 4. Adding error handling and retries for CLI interactions
 5. Creating a user-friendly UI for voice interaction 
 
+## Recent Updates
+
+The following key improvements have been implemented:
+
+1. ✅ Proper Node.js installation with automatic detection and setup
+2. ✅ Local Claude Code package installation with correct environment configuration
+3. ✅ Terminal interface for interacting with Claude Code CLI
+4. ✅ Fixed path resolution for finding installed packages
+5. ✅ Improved installation state tracking with SwiftData
+
 ## Pending Work
 
 Before merging this branch back to main, the following items should be completed:
 
-1. ⬜ Create ClaudeCodeService for interacting with Claude Code CLI
-2. ⬜ Implement voice command processing pipeline
-3. ⬜ Create project context management system
-4. ⬜ Add error handling for CLI communication failures
-5. ⬜ Develop voice control UI components
-6. ⬜ Write comprehensive tests for the service
+1. ⬜ Implement voice command processing pipeline
+2. ⬜ Create project context management system
+3. ⬜ Add more robust error handling for CLI communication failures
+4. ⬜ Develop voice control UI components
+5. ⬜ Write comprehensive tests for the service
 
 ## How to Use
 
