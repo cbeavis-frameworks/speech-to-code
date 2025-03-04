@@ -41,7 +41,32 @@ class ClaudeCodeService: ObservableObject {
             terminalOutput += "\n> \(message)\n"
         }
         
-        let claudeCommandPath = (nodeDirectory?.isEmpty ?? true) ? "npx" : "\(nodeDirectory!)/npx"
+        // Determine the correct path to npx
+        let claudeCommandPath: String
+        if let nodeDir = nodeDirectory, !nodeDir.isEmpty {
+            claudeCommandPath = "\(nodeDir)/npx"
+            await MainActor.run {
+                terminalOutput += "\nUsing npx at: \(claudeCommandPath)\n"
+            }
+        } else {
+            // Use system-wide npx if available
+            claudeCommandPath = "/usr/local/bin/npx"
+            await MainActor.run {
+                terminalOutput += "\nFalling back to default npx at: \(claudeCommandPath)\n"
+            }
+        }
+        
+        // Check if the file exists before attempting to run
+        let fileManager = FileManager.default
+        guard fileManager.fileExists(atPath: claudeCommandPath) else {
+            await MainActor.run {
+                let errorMsg = "Error: npx executable not found at \(claudeCommandPath)"
+                errorMessage = errorMsg
+                terminalOutput += "\n\(errorMsg)\n"
+                isProcessing = false
+            }
+            return false
+        }
         
         // Run Claude Code CLI with the user's message
         let result = await ProcessRunner.run(
@@ -74,7 +99,41 @@ class ClaudeCodeService: ObservableObject {
             terminalOutput += "\nChecking Claude Code installation...\n"
         }
         
-        let claudeCommandPath = (nodeDirectory?.isEmpty ?? true) ? "npx" : "\(nodeDirectory!)/npx"
+        // Determine the correct path to npx
+        let claudeCommandPath: String
+        if let nodeDir = nodeDirectory, !nodeDir.isEmpty {
+            claudeCommandPath = "\(nodeDir)/npx"
+            await MainActor.run {
+                terminalOutput += "Using npx at: \(claudeCommandPath)\n"
+            }
+        } else {
+            // Try to find npx in common locations
+            let possiblePaths = [
+                "/usr/local/bin/npx",
+                "/opt/homebrew/bin/npx",
+                "/usr/bin/npx",
+                FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".nvm/versions/node/v18.17.0/bin/npx").path
+            ]
+            
+            let foundPath = possiblePaths.first { FileManager.default.fileExists(atPath: $0) }
+            
+            claudeCommandPath = foundPath ?? "/usr/local/bin/npx"
+            await MainActor.run {
+                terminalOutput += "Falling back to npx at: \(claudeCommandPath)\n"
+            }
+        }
+        
+        // Check if the file exists before attempting to run
+        let fileManager = FileManager.default
+        guard fileManager.fileExists(atPath: claudeCommandPath) else {
+            await MainActor.run {
+                let errorMsg = "Error: npx executable not found at \(claudeCommandPath)"
+                errorMessage = errorMsg
+                terminalOutput += "\(errorMsg)\n"
+                isProcessing = false
+            }
+            return false
+        }
         
         // Run a simple test command with Claude Code
         let result = await ProcessRunner.run(
