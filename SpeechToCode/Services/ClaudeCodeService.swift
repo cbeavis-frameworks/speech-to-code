@@ -7,6 +7,7 @@
 
 import Foundation
 import Combine
+import OSLog
 
 /// Service for interacting with the Claude Code CLI
 class ClaudeCodeService: ObservableObject {
@@ -41,28 +42,29 @@ class ClaudeCodeService: ObservableObject {
             terminalOutput += "\n> \(message)\n"
         }
         
-        // Determine the correct path to npx
-        let claudeCommandPath: String
-        if let nodeDir = nodeDirectory, !nodeDir.isEmpty {
-            claudeCommandPath = "\(nodeDir)/npx"
+        // Make sure we have a valid node directory
+        guard let nodeDir = nodeDirectory, !nodeDir.isEmpty else {
             await MainActor.run {
-                terminalOutput += "\nUsing npx at: \(claudeCommandPath)\n"
-            }
-        } else {
-            // Use system-wide npx if available
-            claudeCommandPath = "/usr/local/bin/npx"
-            await MainActor.run {
-                terminalOutput += "\nFalling back to default npx at: \(claudeCommandPath)\n"
-            }
-        }
-        
-        // Check if the file exists before attempting to run
-        let fileManager = FileManager.default
-        guard fileManager.fileExists(atPath: claudeCommandPath) else {
-            await MainActor.run {
-                let errorMsg = "Error: npx executable not found at \(claudeCommandPath)"
+                let errorMsg = "Error: Node.js installation directory is not set"
                 errorMessage = errorMsg
                 terminalOutput += "\n\(errorMsg)\n"
+                terminalOutput += "Please ensure Node.js is properly installed before using Claude Code.\n"
+                isProcessing = false
+            }
+            return false
+        }
+        
+        // Define the npx path based on the node installation
+        let npxPath = "\(nodeDir)/npx"
+        
+        // Check if the npx executable exists
+        let fileManager = FileManager.default
+        guard fileManager.fileExists(atPath: npxPath) else {
+            await MainActor.run {
+                let errorMsg = "Error: npx executable not found at \(npxPath)"
+                errorMessage = errorMsg
+                terminalOutput += "\n\(errorMsg)\n"
+                terminalOutput += "Please ensure Node.js is correctly installed with npx available.\n"
                 isProcessing = false
             }
             return false
@@ -70,7 +72,7 @@ class ClaudeCodeService: ObservableObject {
         
         // Run Claude Code CLI with the user's message
         let result = await ProcessRunner.run(
-            claudeCommandPath,
+            npxPath,
             arguments: ["@anthropic-ai/claude-code", message],
             environment: nil
         )
@@ -99,37 +101,33 @@ class ClaudeCodeService: ObservableObject {
             terminalOutput += "\nChecking Claude Code installation...\n"
         }
         
-        // Determine the correct path to npx
-        let claudeCommandPath: String
-        if let nodeDir = nodeDirectory, !nodeDir.isEmpty {
-            claudeCommandPath = "\(nodeDir)/npx"
+        // Make sure we have a valid node directory
+        guard let nodeDir = nodeDirectory, !nodeDir.isEmpty else {
             await MainActor.run {
-                terminalOutput += "Using npx at: \(claudeCommandPath)\n"
-            }
-        } else {
-            // Try to find npx in common locations
-            let possiblePaths = [
-                "/usr/local/bin/npx",
-                "/opt/homebrew/bin/npx",
-                "/usr/bin/npx",
-                FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".nvm/versions/node/v18.17.0/bin/npx").path
-            ]
-            
-            let foundPath = possiblePaths.first { FileManager.default.fileExists(atPath: $0) }
-            
-            claudeCommandPath = foundPath ?? "/usr/local/bin/npx"
-            await MainActor.run {
-                terminalOutput += "Falling back to npx at: \(claudeCommandPath)\n"
-            }
-        }
-        
-        // Check if the file exists before attempting to run
-        let fileManager = FileManager.default
-        guard fileManager.fileExists(atPath: claudeCommandPath) else {
-            await MainActor.run {
-                let errorMsg = "Error: npx executable not found at \(claudeCommandPath)"
+                let errorMsg = "Error: Node.js installation directory is not set"
                 errorMessage = errorMsg
                 terminalOutput += "\(errorMsg)\n"
+                terminalOutput += "Please ensure Node.js is properly installed before using Claude Code.\n"
+                isProcessing = false
+            }
+            return false
+        }
+        
+        // Define the npx path based on the node installation
+        let npxPath = "\(nodeDir)/npx"
+        
+        await MainActor.run {
+            terminalOutput += "Using npx at: \(npxPath)\n"
+        }
+        
+        // Check if the npx executable exists
+        let fileManager = FileManager.default
+        guard fileManager.fileExists(atPath: npxPath) else {
+            await MainActor.run {
+                let errorMsg = "Error: npx executable not found at \(npxPath)"
+                errorMessage = errorMsg
+                terminalOutput += "\(errorMsg)\n"
+                terminalOutput += "Please ensure Node.js is correctly installed with npx available.\n"
                 isProcessing = false
             }
             return false
@@ -137,18 +135,21 @@ class ClaudeCodeService: ObservableObject {
         
         // Run a simple test command with Claude Code
         let result = await ProcessRunner.run(
-            claudeCommandPath,
+            npxPath,
             arguments: ["@anthropic-ai/claude-code", "--version"],
             environment: nil
         )
         
-        let isWorking = !result.stdout.isEmpty
+        let isWorking = !result.stdout.isEmpty && result.succeeded
         
         await MainActor.run {
             if isWorking {
                 terminalOutput += "Claude Code is installed and working. Version: \(result.stdout.trimmingCharacters(in: .whitespacesAndNewlines))\n"
             } else {
                 terminalOutput += "Claude Code installation check failed.\n"
+                if !result.stderr.isEmpty {
+                    terminalOutput += "Error: \(result.stderr)\n"
+                }
                 errorMessage = "Claude Code installation check failed"
             }
             isProcessing = false
