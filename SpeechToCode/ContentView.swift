@@ -158,13 +158,13 @@ struct MainAppView: View {
         .sheet(isPresented: $showClaudeTerminal) {
             // Load the latest installation state
             let descriptor = FetchDescriptor<InstallationState>()
-            let state = try? modelContext?.fetch(descriptor).first
+            let state = try? modelContext.fetch(descriptor).first
             ClaudeTerminalView(nodeDirectory: state?.nodePath)
         }
         .onAppear {
             // Load the installation state
             let descriptor = FetchDescriptor<InstallationState>()
-            installationState = try? modelContext?.fetch(descriptor).first
+            installationState = try? modelContext.fetch(descriptor).first
         }
     }
 }
