@@ -167,22 +167,57 @@ class InstallationManager: ObservableObject {
             // 2. Install Claude package (remaining 30% of progress)
             updateStatus(status: .inProgress, message: "Installing Claude package...", progress: 0.7)
             
-            // Install the Claude package globally
+            // Install the Claude package locally
             let nodeBinDir = URL(fileURLWithPath: nodePath).deletingLastPathComponent()
+            
+            // Get the app support directory where we're installing Node
+            let claudePackageDir = binDirectory
+            
+            // Store the package directory for later use
+            let claudePackagePath = claudePackageDir?.path ?? ""
+            
+            updateStatus(status: .inProgress, message: "Installing Claude package to \(claudePackagePath)...", progress: 0.7)
+            
+            // Create package.json if it doesn't exist
+            guard let packageDir = claudePackageDir else {
+                AppLogger.log(AppLogger.installation, level: .error, message: "Binary directory is nil, cannot proceed with Claude installation")
+                updateStatus(status: .failed, message: "Failed to install Claude Code: Binary directory not found", progress: 0.7)
+                return
+            }
+            
+            let packageJsonPath = packageDir.appendingPathComponent("package.json").path
+            if !FileManager.default.fileExists(atPath: packageJsonPath) {
+                let packageJson = """
+                {
+                  "name": "speech-to-code-dependencies",
+                  "version": "1.0.0",
+                  "description": "Local dependencies for SpeechToCode",
+                  "private": true
+                }
+                """
+                
+                do {
+                    try packageJson.write(toFile: packageJsonPath, atomically: true, encoding: .utf8)
+                    AppLogger.log(AppLogger.installation, level: .info, message: "Created package.json at \(packageJsonPath)")
+                } catch {
+                    AppLogger.log(AppLogger.installation, level: .error, message: "Failed to create package.json: \(error.localizedDescription)")
+                }
+            }
+            
             let claudeInstalled = await npmInstaller.installPackage(
                 packageName: claudePackageName, 
-                global: true, 
+                global: false, 
                 nodeDirectory: nodeBinDir,
-                workingDirectory: binDirectory
+                workingDirectory: packageDir
             )
             
             if claudeInstalled {
                 // Check the installed version
                 let claudeCheck = await npmInstaller.checkPackageInstalled(
                     packageName: claudePackageName,
-                    global: true,
+                    global: false,
                     nodeDirectory: nodeBinDir,
-                    workingDirectory: binDirectory
+                    workingDirectory: packageDir
                 )
                 
                 let claudeVersion = claudeCheck.version ?? "Unknown"
@@ -193,7 +228,8 @@ class InstallationManager: ObservableObject {
                     nodePath: nodePath,
                     nodeVersion: nodeVersion,
                     claudeInstalled: true,
-                    claudeVersion: claudeVersion
+                    claudeVersion: claudeVersion,
+                    claudePackagePath: claudePackagePath
                 )
                 
                 updateStatus(status: .success, message: "Installation complete! Node.js \(nodeVersion) and Claude \(claudeVersion) installed successfully!", progress: 1.0)
@@ -296,121 +332,54 @@ class InstallationManager: ObservableObject {
         }
     }
     
-    /// Update installation state directly with detailed parameters
-    @MainActor
-    private func updateInstallationState(
-        nodeInstalled: Bool,
-        nodePath: String?,
-        nodeVersion: String?,
-        claudeInstalled: Bool = false,
-        claudeVersion: String? = nil
-    ) {
-        guard let modelContext = self.modelContext else {
-            AppLogger.log(AppLogger.installation, level: .error, message: "No model context available for updating installation state")
-            return
-        }
-        
-        do {
-            let descriptor = FetchDescriptor<InstallationState>()
-            if let installationState = try modelContext.fetch(descriptor).first {
-                // Update state properties
-                installationState.nodeInstalled = nodeInstalled
-                installationState.nodePath = nodePath
-                installationState.nodeVersion = nodeVersion
-                installationState.lastVerified = Date()
-                
-                // Update Claude properties
-                installationState.claudeInstalled = claudeInstalled
-                installationState.claudeVersion = claudeVersion
-                
-                if nodeInstalled, let nodePath = nodePath {
-                    // Set installation directory to the parent of bin directory
-                    installationState.installationDirectory = URL(fileURLWithPath: nodePath)
-                        .deletingLastPathComponent() // remove 'node'
-                        .deletingLastPathComponent() // remove 'bin'
-                        .path
-                    
-                    // Update NodePath singleton
-                    NodePath.shared.setNodeDetails(path: nodePath, version: nodeVersion)
-                } else {
-                    // Clear NodePath singleton if node is not installed
-                    NodePath.shared.clearNodeDetails()
-                }
-                
-                do {
-                    try modelContext.save()
-                    AppLogger.log(AppLogger.installation, level: .info, message: "Installation state updated: Node: \(nodeInstalled ? "Installed" : "Not installed"), Claude: \(claudeInstalled ? "Installed" : "Not installed")")
-                } catch {
-                    AppLogger.log(AppLogger.installation, level: .error, message: "Failed to save installation state: \(error.localizedDescription)")
-                }
-            } else {
-                AppLogger.log(AppLogger.installation, level: .error, message: "No installation state found in model context")
-            }
-        } catch {
-            AppLogger.log(AppLogger.installation, level: .error, message: "Failed to fetch installation state: \(error.localizedDescription)")
-        }
-    }
-    
-    /// Update installation state in the model context
+    /// Update the installation state in the model context
     @MainActor
     private func updateInstallationState(
         nodeInstalled: Bool? = nil,
         nodePath: String? = nil,
         nodeVersion: String? = nil,
-        statusMessage: String? = nil
+        claudeInstalled: Bool? = nil,
+        claudeVersion: String? = nil,
+        claudePackagePath: String? = nil
     ) {
-        guard let modelContext = self.modelContext else {
-            AppLogger.log(AppLogger.installation, level: .error, message: "No model context available for updating installation state")
+        guard let modelContext = modelContext else {
+            AppLogger.log(AppLogger.installation, level: .error, message: "No model context available to update installation state")
             return
         }
         
-        // Attempt to reload the model context if needed
-        if modelContext.autosaveEnabled == false {
-            AppLogger.log(AppLogger.installation, level: .warning, message: "Model context autosave is disabled, enabling it")
-            modelContext.autosaveEnabled = true
+        let descriptor = FetchDescriptor<InstallationState>()
+        guard let states = try? modelContext.fetch(descriptor), let state = states.first else {
+            AppLogger.log(AppLogger.installation, level: .error, message: "No installation state found to update")
+            return
         }
         
-        let descriptor = FetchDescriptor<InstallationState>()
+        if let nodeInstalled = nodeInstalled {
+            state.nodeInstalled = nodeInstalled
+        }
+        
+        if let nodePath = nodePath {
+            state.nodePath = nodePath
+        }
+        
+        if let nodeVersion = nodeVersion {
+            state.nodeVersion = nodeVersion
+        }
+        
+        if let claudeInstalled = claudeInstalled {
+            state.claudeInstalled = claudeInstalled
+        }
+        
+        if let claudeVersion = claudeVersion {
+            state.claudeVersion = claudeVersion
+        }
+        
+        if let claudePackagePath = claudePackagePath {
+            state.claudePackagePath = claudePackagePath
+        }
+        
         do {
-            guard let state = try modelContext.fetch(descriptor).first else {
-                AppLogger.log(AppLogger.installation, level: .error, message: "No installation state found in model context")
-                
-                // If no state exists, create a new one
-                let newState = InstallationState(
-                    nodeInstalled: nodeInstalled ?? false,
-                    nodePath: nodePath,
-                    lastVerified: Date(),
-                    installationDirectory: binDirectory?.path,
-                    nodeVersion: nodeVersion,
-                    statusMessage: statusMessage
-                )
-                
-                modelContext.insert(newState)
-                try modelContext.save()
-                AppLogger.log(AppLogger.installation, level: .info, message: "Created and saved new installation state")
-                return
-            }
-            
-            if let nodeInstalled = nodeInstalled {
-                state.nodeInstalled = nodeInstalled
-            }
-            
-            if let nodePath = nodePath {
-                state.nodePath = nodePath
-            }
-            
-            if let nodeVersion = nodeVersion {
-                state.nodeVersion = nodeVersion
-            }
-            
-            if let statusMessage = statusMessage {
-                state.statusMessage = statusMessage
-            }
-            
-            state.lastVerified = Date()
-            
             try modelContext.save()
-            AppLogger.log(AppLogger.installation, level: .info, message: "Installation state updated and saved")
+            AppLogger.log(AppLogger.installation, level: .info, message: "Updated installation state: nodeInstalled=\(state.nodeInstalled), claudeInstalled=\(state.claudeInstalled)")
         } catch {
             AppLogger.log(AppLogger.installation, level: .error, message: "Failed to save installation state: \(error.localizedDescription)")
         }
