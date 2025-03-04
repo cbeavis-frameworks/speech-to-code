@@ -29,6 +29,34 @@ class ClaudeCodeService: ObservableObject {
         self.nodeBinPath = nodeBinPath
     }
     
+    /// Prepare environment variables for running Node.js executables
+    /// - Returns: Environment dictionary with PATH and NODE variables set
+    private func prepareEnvironment() -> [String: String]? {
+        guard let binDir = nodeBinPath, !binDir.isEmpty else {
+            return nil
+        }
+        
+        // Create a modified environment with the bin directory in the PATH
+        var env = ProcessInfo.processInfo.environment
+        
+        // Add the bin directory to PATH
+        if var path = env["PATH"] {
+            // Make sure the bin directory is at the start of PATH
+            if !path.contains(binDir) {
+                path = "\(binDir):\(path)"
+                env["PATH"] = path
+            }
+        } else {
+            env["PATH"] = binDir
+        }
+        
+        // Set the NODE environment variable to the node executable path
+        let nodePath = "\(binDir)/node"
+        env["NODE"] = nodePath
+        
+        return env
+    }
+    
     /// Send a message to Claude Code CLI
     /// - Parameter message: The message to send
     /// - Returns: Success indicator
@@ -71,11 +99,22 @@ class ClaudeCodeService: ObservableObject {
             return false
         }
         
+        // Prepare environment with proper PATH setting
+        guard let environment = prepareEnvironment() else {
+            await MainActor.run {
+                let errorMsg = "Error: Unable to prepare environment variables"
+                errorMessage = errorMsg
+                terminalOutput += "\n\(errorMsg)\n"
+                isProcessing = false
+            }
+            return false
+        }
+        
         // Run Claude Code CLI with the user's message
         let result = await ProcessRunner.run(
             npxPath,
             arguments: ["@anthropic-ai/claude-code", message],
-            environment: nil
+            environment: environment
         )
         
         // Update the terminal output with Claude's response
@@ -134,11 +173,40 @@ class ClaudeCodeService: ObservableObject {
             return false
         }
         
+        // Make sure node executable exists too
+        let nodePath = "\(binDir)/node"
+        if !fileManager.fileExists(atPath: nodePath) {
+            await MainActor.run {
+                let errorMsg = "Error: node executable not found at \(nodePath)"
+                errorMessage = errorMsg
+                terminalOutput += "\(errorMsg)\n"
+                terminalOutput += "Please ensure Node.js is correctly installed.\n"
+                isProcessing = false
+            }
+            return false
+        }
+        
+        // Prepare environment with proper PATH setting
+        guard let environment = prepareEnvironment() else {
+            await MainActor.run {
+                let errorMsg = "Error: Unable to prepare environment variables"
+                errorMessage = errorMsg
+                terminalOutput += "\(errorMsg)\n"
+                isProcessing = false
+            }
+            return false
+        }
+        
+        await MainActor.run {
+            terminalOutput += "Using node at: \(nodePath)\n"
+            terminalOutput += "PATH environment includes: \(environment["PATH"] ?? "unknown")\n"
+        }
+        
         // Run a simple test command with Claude Code
         let result = await ProcessRunner.run(
             npxPath,
             arguments: ["@anthropic-ai/claude-code", "--version"],
-            environment: nil
+            environment: environment
         )
         
         let isWorking = !result.stdout.isEmpty && result.succeeded
