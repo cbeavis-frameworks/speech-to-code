@@ -101,11 +101,10 @@ struct InstallationView: View {
                     
                     Button(action: {
                         Task {
-                            _ = await installationManager.performInstallation()
-                            // Force a refresh of the installation state
-                            if installationManager.isInstalling {
-                                try? await Task.sleep(nanoseconds: 500_000_000) // Wait half a second
-                                await loadInstallationState() // Reload state to update UI
+                            let success = await installationManager.performInstallation()
+                            if success {
+                                // Force a refresh of the installation state
+                                await loadInstallationState()
                             }
                         }
                     }) {
@@ -115,7 +114,7 @@ struct InstallationView: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(installationManager.isInstalling)
                     
-                    if let error = installationState?.statusMessage, 
+                    if let _ = installationState?.statusMessage, 
                        installationState?.nodeInstalled == false {
                         // Error message is hidden
                     }
@@ -154,13 +153,14 @@ struct InstallationView: View {
         
         if cleaned {
             await loadInstallationState()
-            await installationManager.performInstallation()
-            
-            // Add a brief delay to allow database operations to complete
-            try? await Task.sleep(nanoseconds: 500_000_000) // Wait half a second
-            
-            // Force a refresh of the installation state
-            await loadInstallationState()
+            let success = await installationManager.performInstallation()
+            if success {
+                // Add a brief delay to allow database operations to complete
+                try? await Task.sleep(nanoseconds: 500_000_000) // Wait half a second
+                
+                // Force a refresh of the installation state
+                await loadInstallationState()
+            }
         }
         
         await MainActor.run {

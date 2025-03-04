@@ -30,6 +30,7 @@ class ClaudeCodeService: ObservableObject {
     /// Send a message to Claude Code CLI
     /// - Parameter message: The message to send
     /// - Returns: Success indicator
+    @discardableResult
     func sendMessage(_ message: String) async -> Bool {
         guard !message.isEmpty else { return false }
         
@@ -40,31 +41,22 @@ class ClaudeCodeService: ObservableObject {
             terminalOutput += "\n> \(message)\n"
         }
         
-        do {
-            let claudeCommandPath = (nodeDirectory?.isEmpty ?? true) ? "npx" : "\(nodeDirectory!)/npx"
-            
-            // Run Claude Code CLI with the user's message
-            let result = try await ProcessRunner.run(
-                claudeCommandPath,
-                arguments: ["@anthropic-ai/claude-code", message],
-                environment: nil
-            )
-            
-            // Update the terminal output with Claude's response
-            await MainActor.run {
-                terminalOutput += "\n" + result.stdout
-                isProcessing = false
-            }
-            
-            return true
-        } catch {
-            await MainActor.run {
-                errorMessage = "Error: \(error.localizedDescription)"
-                terminalOutput += "\nError: \(error.localizedDescription)\n"
-                isProcessing = false
-            }
-            return false
+        let claudeCommandPath = (nodeDirectory?.isEmpty ?? true) ? "npx" : "\(nodeDirectory!)/npx"
+        
+        // Run Claude Code CLI with the user's message
+        let result = await ProcessRunner.run(
+            claudeCommandPath,
+            arguments: ["@anthropic-ai/claude-code", message],
+            environment: nil
+        )
+        
+        // Update the terminal output with Claude's response
+        await MainActor.run {
+            terminalOutput += "\n" + result.stdout
+            isProcessing = false
         }
+        
+        return true
     }
     
     /// Clear the terminal output
@@ -75,42 +67,34 @@ class ClaudeCodeService: ObservableObject {
     
     /// Check if Claude Code CLI is installed and working
     /// - Returns: True if Claude Code is working, false otherwise
+    @discardableResult
     func checkClaudeCodeInstallation() async -> Bool {
         await MainActor.run {
             isProcessing = true
             terminalOutput += "\nChecking Claude Code installation...\n"
         }
         
-        do {
-            let claudeCommandPath = (nodeDirectory?.isEmpty ?? true) ? "npx" : "\(nodeDirectory!)/npx"
-            
-            // Run a simple test command with Claude Code
-            let result = try await ProcessRunner.run(
-                claudeCommandPath,
-                arguments: ["@anthropic-ai/claude-code", "--version"],
-                environment: nil
-            )
-            
-            let isWorking = !result.stdout.isEmpty
-            
-            await MainActor.run {
-                if isWorking {
-                    terminalOutput += "Claude Code is installed and working. Version: \(result.stdout.trimmingCharacters(in: .whitespacesAndNewlines))\n"
-                } else {
-                    terminalOutput += "Claude Code installation check failed.\n"
-                    errorMessage = "Claude Code installation check failed"
-                }
-                isProcessing = false
+        let claudeCommandPath = (nodeDirectory?.isEmpty ?? true) ? "npx" : "\(nodeDirectory!)/npx"
+        
+        // Run a simple test command with Claude Code
+        let result = await ProcessRunner.run(
+            claudeCommandPath,
+            arguments: ["@anthropic-ai/claude-code", "--version"],
+            environment: nil
+        )
+        
+        let isWorking = !result.stdout.isEmpty
+        
+        await MainActor.run {
+            if isWorking {
+                terminalOutput += "Claude Code is installed and working. Version: \(result.stdout.trimmingCharacters(in: .whitespacesAndNewlines))\n"
+            } else {
+                terminalOutput += "Claude Code installation check failed.\n"
+                errorMessage = "Claude Code installation check failed"
             }
-            
-            return isWorking
-        } catch {
-            await MainActor.run {
-                errorMessage = "Error checking Claude Code: \(error.localizedDescription)"
-                terminalOutput += "Error checking Claude Code: \(error.localizedDescription)\n"
-                isProcessing = false
-            }
-            return false
+            isProcessing = false
         }
+        
+        return isWorking
     }
 }

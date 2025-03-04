@@ -57,7 +57,7 @@ struct ClaudeTerminalView: View {
                     Task {
                         let message = userInput
                         userInput = ""
-                        await claudeService.sendMessage(message)
+                        _ = await claudeService.sendMessage(message)
                     }
                 }) {
                     Text("Send")
@@ -103,7 +103,7 @@ struct ClaudeTerminalView: View {
         .onAppear {
             Task {
                 if isInitializing {
-                    await claudeService.checkClaudeCodeInstallation()
+                    _ = await claudeService.checkClaudeCodeInstallation()
                     isInitializing = false
                 }
             }
