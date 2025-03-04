@@ -167,25 +167,19 @@ class InstallationManager: ObservableObject {
             // 2. Install Claude package (remaining 30% of progress)
             updateStatus(status: .inProgress, message: "Installing Claude package...", progress: 0.7)
             
-            // Install the Claude package locally
+            // Get the app support directory where we're installing Node
             let nodeBinDir = URL(fileURLWithPath: nodePath).deletingLastPathComponent()
             
-            // Get the app support directory where we're installing Node
-            let claudePackageDir = binDirectory
+            // Use the node installation directory for the Claude package (inside node-18.17.1)
+            let claudePackageDir = URL(fileURLWithPath: nodePath).deletingLastPathComponent().deletingLastPathComponent()
             
             // Store the package directory for later use
-            let claudePackagePath = claudePackageDir?.path ?? ""
+            let claudePackagePath = claudePackageDir.path
             
             updateStatus(status: .inProgress, message: "Installing Claude package to \(claudePackagePath)...", progress: 0.7)
             
             // Create package.json if it doesn't exist
-            guard let packageDir = claudePackageDir else {
-                AppLogger.log(AppLogger.installation, level: .error, message: "Binary directory is nil, cannot proceed with Claude installation")
-                updateStatus(status: .failed, message: "Failed to install Claude Code: Binary directory not found", progress: 0.7)
-                return false
-            }
-            
-            let packageJsonPath = packageDir.appendingPathComponent("package.json").path
+            let packageJsonPath = claudePackageDir.appendingPathComponent("package.json").path
             if !FileManager.default.fileExists(atPath: packageJsonPath) {
                 let packageJson = """
                 {
@@ -208,7 +202,7 @@ class InstallationManager: ObservableObject {
                 packageName: claudePackageName, 
                 global: false, 
                 nodeDirectory: nodeBinDir,
-                workingDirectory: packageDir
+                workingDirectory: claudePackageDir
             )
             
             if claudeInstalled {
@@ -217,7 +211,7 @@ class InstallationManager: ObservableObject {
                     packageName: claudePackageName,
                     global: false,
                     nodeDirectory: nodeBinDir,
-                    workingDirectory: packageDir
+                    workingDirectory: claudePackageDir
                 )
                 
                 let claudeVersion = claudeCheck.version ?? "Unknown"

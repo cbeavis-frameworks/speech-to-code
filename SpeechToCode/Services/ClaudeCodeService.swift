@@ -62,8 +62,18 @@ class ClaudeCodeService: ObservableObject {
         
         // Set NODE_PATH to include the package directory if available
         if let packageDir = claudePackagePath, !packageDir.isEmpty {
-            let nodeModulesPath = URL(fileURLWithPath: packageDir).appendingPathComponent("node_modules").path
-            env["NODE_PATH"] = nodeModulesPath
+            // Add both potential locations for node_modules
+            let nodeModulesPath1 = URL(fileURLWithPath: packageDir).appendingPathComponent("node_modules").path
+            
+            // Get the base directory of the Node.js installation
+            let nodeBaseDir = URL(fileURLWithPath: binDir).deletingLastPathComponent().path
+            let nodeModulesPath2 = URL(fileURLWithPath: nodeBaseDir).appendingPathComponent("node_modules").path
+            
+            // Combine both paths
+            env["NODE_PATH"] = "\(nodeModulesPath1):\(nodeModulesPath2)"
+            
+            // Debug output
+            print("Set NODE_PATH to: \(env["NODE_PATH"] ?? "unknown")")
         }
         
         return env
