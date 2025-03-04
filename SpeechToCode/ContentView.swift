@@ -11,6 +11,7 @@ import SwiftData
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var appStateManager: AppStateManager
+    @State private var showClaudeTerminal: Bool = false
     
     var body: some View {
         Group {
@@ -21,6 +22,7 @@ struct ContentView: View {
                     }
             } else {
                 MainAppView()
+                    .environment(\.modelContext, modelContext)
             }
         }
     }
@@ -28,9 +30,12 @@ struct ContentView: View {
 
 /// The main application view after installation is complete
 struct MainAppView: View {
+    @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var appStateManager: AppStateManager
     @State private var isSelectingProject = false
     @State private var selectedDirectory: URL?
+    @State private var showClaudeTerminal: Bool = false
+    @State private var installationState: InstallationState?
     
     var body: some View {
         VStack(spacing: 20) {
@@ -71,6 +76,27 @@ struct MainAppView: View {
             .background(Color.white.opacity(0.8))
             .cornerRadius(12)
             .shadow(radius: 2)
+            
+            // Claude Terminal Button
+            Button(action: {
+                showClaudeTerminal = true
+            }) {
+                HStack {
+                    Image(systemName: "terminal.fill")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 24, height: 24)
+                    Text("Open Claude Terminal")
+                        .font(.headline)
+                }
+                .padding()
+                .frame(width: 250)
+                .background(Color.blue)
+                .foregroundColor(.white)
+                .cornerRadius(10)
+            }
+            .buttonStyle(.plain)
+            .padding(.vertical)
             
             Spacer()
             
@@ -128,6 +154,17 @@ struct MainAppView: View {
             case .failure(let error):
                 print("Error selecting directory: \(error.localizedDescription)")
             }
+        }
+        .sheet(isPresented: $showClaudeTerminal) {
+            // Load the latest installation state
+            let descriptor = FetchDescriptor<InstallationState>()
+            let state = try? modelContext?.fetch(descriptor).first
+            ClaudeTerminalView(nodeDirectory: state?.nodePath)
+        }
+        .onAppear {
+            // Load the installation state
+            let descriptor = FetchDescriptor<InstallationState>()
+            installationState = try? modelContext?.fetch(descriptor).first
         }
     }
 }

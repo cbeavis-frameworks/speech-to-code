@@ -11,9 +11,11 @@ import SwiftData
 /// View that handles the installation of Node.js
 struct InstallationView: View {
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var appStateManager: AppStateManager
     @StateObject var installationManager = InstallationManager()
     @State private var installationState: InstallationState?
     @State private var isCheckingInstallation = true
+    @State private var showTerminal = false
     
     var body: some View {
         VStack(spacing: 30) {
@@ -70,6 +72,17 @@ struct InstallationView: View {
                     .foregroundColor(.secondary)
                     .padding()
                     
+                    // Next button to proceed to terminal
+                    Button(action: {
+                        appStateManager.updateInstallationCompleted(true)
+                        showTerminal = true
+                    }) {
+                        Text("Next: Open Claude Terminal")
+                            .frame(minWidth: 200)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .padding(.vertical)
+                    
                     Button(action: {
                         Task {
                             await cleanAndReinstall()
@@ -79,7 +92,6 @@ struct InstallationView: View {
                             .font(.subheadline)
                     }
                     .buttonStyle(.bordered)
-                    .padding(.top)
                 }
             } else {
                 VStack(spacing: 20) {
@@ -116,6 +128,13 @@ struct InstallationView: View {
             Task {
                 await loadInstallationState()
                 isCheckingInstallation = false
+            }
+        }
+        .sheet(isPresented: $showTerminal) {
+            if let state = installationState {
+                ClaudeTerminalView(nodeDirectory: state.nodePath)
+            } else {
+                ClaudeTerminalView(nodeDirectory: nil)
             }
         }
     }
