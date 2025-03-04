@@ -36,6 +36,7 @@ struct ClaudeTerminalView: View {
                             .font(.system(.body, design: .monospaced))
                             .padding()
                             .frame(maxWidth: .infinity, alignment: .leading)
+                            .textSelection(.enabled)  // Enable text selection
                             .id("outputEnd")
                     }
                 }

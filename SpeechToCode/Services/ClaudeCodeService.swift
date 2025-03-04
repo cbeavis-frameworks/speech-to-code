@@ -55,7 +55,7 @@ class ClaudeCodeService: ObservableObject {
         }
         
         // Define the npx path based on the node installation
-        let npxPath = "\(nodeDir)/npx"
+        let npxPath = "\(nodeDir)/bin/npx"
         
         // Check if the npx executable exists
         let fileManager = FileManager.default
@@ -114,7 +114,7 @@ class ClaudeCodeService: ObservableObject {
         }
         
         // Define the npx path based on the node installation
-        let npxPath = "\(nodeDir)/npx"
+        let npxPath = "\(nodeDir)/bin/npx"
         
         await MainActor.run {
             terminalOutput += "Using npx at: \(npxPath)\n"
