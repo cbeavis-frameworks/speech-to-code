@@ -202,6 +202,43 @@ class ClaudeCodeService: ObservableObject {
             terminalOutput += "PATH environment includes: \(environment["PATH"] ?? "unknown")\n"
         }
         
+        // Check if the Claude Code package is installed
+        let checkPackageResult = await ProcessRunner.run(
+            npxPath,
+            arguments: ["--no-install", "which", "@anthropic-ai/claude-code"],
+            environment: environment
+        )
+        
+        // If the package is not found, we need to install it
+        if !checkPackageResult.succeeded || checkPackageResult.stdout.isEmpty {
+            await MainActor.run {
+                terminalOutput += "Claude Code package not found. Attempting to install...\n"
+            }
+            
+            // Install Claude Code package
+            let installResult = await ProcessRunner.run(
+                npxPath,
+                arguments: ["npm", "install", "-g", "@anthropic-ai/claude-code"],
+                environment: environment
+            )
+            
+            if !installResult.succeeded {
+                await MainActor.run {
+                    terminalOutput += "Failed to install Claude Code package.\n"
+                    if !installResult.stderr.isEmpty {
+                        terminalOutput += "Error: \(installResult.stderr)\n"
+                    }
+                    errorMessage = "Failed to install Claude Code package"
+                    isProcessing = false
+                }
+                return false
+            }
+            
+            await MainActor.run {
+                terminalOutput += "Claude Code package installed successfully.\n"
+            }
+        }
+        
         // Run a simple test command with Claude Code
         let result = await ProcessRunner.run(
             npxPath,
