@@ -89,7 +89,7 @@ struct InstallationView: View {
                         }
                     }) {
                         Text("Reinstall Components")
-                            .font(.subheadline)
+                        .font(.subheadline)
                     }
                     .buttonStyle(.bordered)
                 }
@@ -130,10 +130,14 @@ struct InstallationView: View {
             }
         }
         .sheet(isPresented: $showTerminal) {
-            if let state = installationState {
-                ClaudeTerminalView(nodeDirectory: state.nodePath)
+            if let state = installationState, let nodePath = state.nodePath, !nodePath.isEmpty {
+                // Extract the bin directory from the node executable path
+                let nodeBinPath = URL(fileURLWithPath: nodePath).deletingLastPathComponent().path
+                ClaudeTerminalView(nodeBinPath: nodeBinPath)
+                    .environmentObject(appStateManager)
             } else {
-                ClaudeTerminalView(nodeDirectory: nil)
+                ClaudeTerminalView(nodeBinPath: nil)
+                    .environmentObject(appStateManager)
             }
         }
     }
