@@ -182,7 +182,7 @@ class InstallationManager: ObservableObject {
             guard let packageDir = claudePackageDir else {
                 AppLogger.log(AppLogger.installation, level: .error, message: "Binary directory is nil, cannot proceed with Claude installation")
                 updateStatus(status: .failed, message: "Failed to install Claude Code: Binary directory not found", progress: 0.7)
-                return
+                return false
             }
             
             let packageJsonPath = packageDir.appendingPathComponent("package.json").path
