@@ -133,10 +133,13 @@ struct InstallationView: View {
             if let state = installationState, let nodePath = state.nodePath, !nodePath.isEmpty {
                 // Extract the bin directory from the node executable path
                 let nodeBinPath = URL(fileURLWithPath: nodePath).deletingLastPathComponent().path
-                ClaudeTerminalView(nodeBinPath: nodeBinPath)
+                ClaudeTerminalView(
+                    nodeBinPath: nodeBinPath,
+                    claudePackagePath: state.claudePackagePath
+                )
                     .environmentObject(appStateManager)
             } else {
-                ClaudeTerminalView(nodeBinPath: nil)
+                ClaudeTerminalView(nodeBinPath: nil, claudePackagePath: nil)
                     .environmentObject(appStateManager)
             }
         }

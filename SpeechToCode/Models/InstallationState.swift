@@ -32,6 +32,9 @@ final class InstallationState {
     /// Claude package version
     var claudeVersion: String?
     
+    /// Path to the Claude package directory
+    var claudePackagePath: String?
+    
     /// Installation status message
     var statusMessage: String?
     
@@ -43,6 +46,7 @@ final class InstallationState {
         nodeVersion: String? = nil,
         claudeInstalled: Bool = false,
         claudeVersion: String? = nil,
+        claudePackagePath: String? = nil,
         statusMessage: String? = nil
     ) {
         self.nodeInstalled = nodeInstalled
@@ -52,6 +56,7 @@ final class InstallationState {
         self.nodeVersion = nodeVersion
         self.claudeInstalled = claudeInstalled
         self.claudeVersion = claudeVersion
+        self.claudePackagePath = claudePackagePath
         self.statusMessage = statusMessage
     }
     
@@ -62,6 +67,7 @@ final class InstallationState {
         lastVerified = nil
         claudeInstalled = false
         claudeVersion = nil
+        claudePackagePath = nil
         statusMessage = "Installation reset"
     }
 }

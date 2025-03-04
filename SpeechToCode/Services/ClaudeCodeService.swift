@@ -23,10 +23,16 @@ class ClaudeCodeService: ObservableObject {
     /// Path to the bin directory containing Node.js executables
     private var nodeBinPath: String?
     
+    /// Path to the Claude package directory
+    private var claudePackagePath: String?
+    
     /// Initialize the service with the path to the bin directory containing Node.js executables
-    /// - Parameter nodeBinPath: Path to the directory containing node, npm, and npx executables
-    init(nodeBinPath: String? = nil) {
+    /// - Parameters:
+    ///   - nodeBinPath: Path to the directory containing node, npm, and npx executables
+    ///   - claudePackagePath: Path to the directory where Claude Code package is installed
+    init(nodeBinPath: String? = nil, claudePackagePath: String? = nil) {
         self.nodeBinPath = nodeBinPath
+        self.claudePackagePath = claudePackagePath
     }
     
     /// Prepare environment variables for running Node.js executables
@@ -53,6 +59,12 @@ class ClaudeCodeService: ObservableObject {
         // Set the NODE environment variable to the node executable path
         let nodePath = "\(binDir)/node"
         env["NODE"] = nodePath
+        
+        // Set NODE_PATH to include the package directory if available
+        if let packageDir = claudePackagePath, !packageDir.isEmpty {
+            let nodeModulesPath = URL(fileURLWithPath: packageDir).appendingPathComponent("node_modules").path
+            env["NODE_PATH"] = nodeModulesPath
+        }
         
         return env
     }
@@ -213,12 +225,28 @@ class ClaudeCodeService: ObservableObject {
         if !checkPackageResult.succeeded || checkPackageResult.stdout.isEmpty {
             await MainActor.run {
                 terminalOutput += "Claude Code package not found. Attempting to install...\n"
+                if let packageDir = claudePackagePath {
+                    terminalOutput += "Installing to: \(packageDir)\n"
+                }
             }
             
             // Install Claude Code package
+            var npmArgs = ["npm", "install"]
+            
+            // Install to the specified package directory if available
+            if let packageDir = claudePackagePath, !packageDir.isEmpty {
+                npmArgs.append("--prefix")
+                npmArgs.append(packageDir)
+            } else {
+                // Fall back to global installation if package path not specified
+                npmArgs.append("-g")
+            }
+            
+            npmArgs.append("@anthropic-ai/claude-code")
+            
             let installResult = await ProcessRunner.run(
                 npxPath,
-                arguments: ["npm", "install", "-g", "@anthropic-ai/claude-code"],
+                arguments: npmArgs,
                 environment: environment
             )
             

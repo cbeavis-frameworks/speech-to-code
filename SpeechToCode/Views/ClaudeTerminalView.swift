@@ -16,8 +16,8 @@ struct ClaudeTerminalView: View {
     @State private var userInput: String = ""
     @State private var isInitializing: Bool = true
     
-    init(nodeBinPath: String?) {
-        _claudeService = StateObject(wrappedValue: ClaudeCodeService(nodeBinPath: nodeBinPath))
+    init(nodeBinPath: String?, claudePackagePath: String? = nil) {
+        _claudeService = StateObject(wrappedValue: ClaudeCodeService(nodeBinPath: nodeBinPath, claudePackagePath: claudePackagePath))
     }
     
     var body: some View {

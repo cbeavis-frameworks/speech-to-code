@@ -168,7 +168,10 @@ struct MainAppView: View {
                 return nil
             }()
             
-            ClaudeTerminalView(nodeBinPath: nodeBinPath)
+            ClaudeTerminalView(
+                nodeBinPath: nodeBinPath,
+                claudePackagePath: state?.claudePackagePath
+            )
                 .environmentObject(appStateManager)
         }
         .onAppear {
