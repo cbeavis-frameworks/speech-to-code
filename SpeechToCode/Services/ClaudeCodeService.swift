@@ -19,9 +19,6 @@ class ClaudeCodeService: ObservableObject {
     /// Error message, if any
     @Published var errorMessage: String?
     
-    /// The process runner for executing Claude Code commands
-    private let processRunner = ProcessRunner()
-    
     /// The Node.js installation directory
     private var nodeDirectory: String?
     
@@ -47,15 +44,15 @@ class ClaudeCodeService: ObservableObject {
             let claudeCommandPath = (nodeDirectory?.isEmpty ?? true) ? "npx" : "\(nodeDirectory!)/npx"
             
             // Run Claude Code CLI with the user's message
-            let result = try await processRunner.run(
-                executable: claudeCommandPath,
+            let result = try await ProcessRunner.run(
+                claudeCommandPath,
                 arguments: ["@anthropic-ai/claude-code", message],
                 environment: nil
             )
             
             // Update the terminal output with Claude's response
             await MainActor.run {
-                terminalOutput += "\n" + result.standardOutput
+                terminalOutput += "\n" + result.stdout
                 isProcessing = false
             }
             
@@ -88,17 +85,17 @@ class ClaudeCodeService: ObservableObject {
             let claudeCommandPath = (nodeDirectory?.isEmpty ?? true) ? "npx" : "\(nodeDirectory!)/npx"
             
             // Run a simple test command with Claude Code
-            let result = try await processRunner.run(
-                executable: claudeCommandPath,
+            let result = try await ProcessRunner.run(
+                claudeCommandPath,
                 arguments: ["@anthropic-ai/claude-code", "--version"],
                 environment: nil
             )
             
-            let isWorking = !result.standardOutput.isEmpty
+            let isWorking = !result.stdout.isEmpty
             
             await MainActor.run {
                 if isWorking {
-                    terminalOutput += "Claude Code is installed and working. Version: \(result.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines))\n"
+                    terminalOutput += "Claude Code is installed and working. Version: \(result.stdout.trimmingCharacters(in: .whitespacesAndNewlines))\n"
                 } else {
                     terminalOutput += "Claude Code installation check failed.\n"
                     errorMessage = "Claude Code installation check failed"
