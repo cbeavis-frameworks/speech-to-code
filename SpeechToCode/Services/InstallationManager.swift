@@ -167,11 +167,11 @@ class InstallationManager: ObservableObject {
             // 2. Install Claude package (remaining 30% of progress)
             updateStatus(status: .inProgress, message: "Installing Claude package...", progress: 0.7)
             
-            // Install the Claude package locally
+            // Install the Claude package globally
             let nodeBinDir = URL(fileURLWithPath: nodePath).deletingLastPathComponent()
             let claudeInstalled = await npmInstaller.installPackage(
                 packageName: claudePackageName, 
-                global: false, 
+                global: true, 
                 nodeDirectory: nodeBinDir,
                 workingDirectory: binDirectory
             )
@@ -180,7 +180,7 @@ class InstallationManager: ObservableObject {
                 // Check the installed version
                 let claudeCheck = await npmInstaller.checkPackageInstalled(
                     packageName: claudePackageName,
-                    global: false,
+                    global: true,
                     nodeDirectory: nodeBinDir,
                     workingDirectory: binDirectory
                 )

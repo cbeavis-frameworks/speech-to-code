@@ -205,7 +205,7 @@ class ClaudeCodeService: ObservableObject {
         // Check if the Claude Code package is installed
         let checkPackageResult = await ProcessRunner.run(
             npxPath,
-            arguments: ["--no-install", "which", "@anthropic-ai/claude-code"],
+            arguments: ["--no-install", "@anthropic-ai/claude-code", "--version"],
             environment: environment
         )
         
