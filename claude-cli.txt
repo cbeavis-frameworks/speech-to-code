@@ -1,0 +1,352 @@
+Claude Code
+Claude Code overview
+Learn about Claude Code, an agentic coding tool made by Anthropic. Currently in beta as a research preview.
+
+
+npm install -g @anthropic-ai/claude-code
+Claude Code is an agentic coding tool that lives in your terminal, understands your codebase, and helps you code faster through natural language commands. By integrating directly with your development environment, Claude Code streamlines your workflow without requiring additional servers or complex setup.
+
+Claude Code’s key capabilities include:
+
+Editing files and fixing bugs across your codebase
+Answering questions about your code’s architecture and logic
+Executing and fixing tests, linting, and other commands
+Searching through git history, resolving merge conflicts, and creating commits and PRs
+Research preview
+
+Code is in beta as a research preview. We’re gathering developer feedback on AI collaboration preferences, which workflows benefit most from AI assistance, and how to improve the agent experience.
+
+This early version will evolve based on user feedback. We plan to enhance tool execution reliability, support for long-running commands, terminal rendering, and Claude’s self-knowledge of its capabilities in the coming weeks.
+
+Report bugs directly with the /bug command or through our GitHub repository.
+
+​
+Before you begin
+​
+Check system requirements
+Operating Systems: macOS 10.15+, Ubuntu 20.04+/Debian 10+, or Windows via WSL
+Hardware: 4GB RAM minimum
+Software:
+Node.js 18+
+git 2.23+ (optional)
+GitHub or GitLab CLI for PR workflows (optional)
+ripgrep (rg) for enhanced file search (optional)
+Network: Internet connection required for authentication and AI processing
+Location: Available only in supported countries
+Troubleshooting WSL installation
+
+Currently, Claude Code does not run directly in Windows, and instead requires WSL. If you encounter issues in WSL:
+
+OS/platform detection issues: If you receive an error during installation, WSL may be using Windows npm. Try:
+
+Run npm config set os linux before installation
+Install with npm install -g @anthropic-ai/claude-code --force --no-os-check
+Node not found errors: If you see exec: node: not found when running claude, your WSL environment may be using a Windows installation of Node.js. You can confirm this with which npm and which node, which should point to Linux paths starting with /usr/ rather than /mnt/c/. To fix this, try installing Node via your Linux distribution’s package manager or via nvm.
+
+​
+Install and authenticate
+1
+Install Claude Code
+
+Run in your terminal: npm install -g @anthropic-ai/claude-code
+
+2
+Navigate to your project
+
+cd your-project-directory
+3
+Start Claude Code
+
+Run claude to launch
+4
+Complete authentication
+
+Follow the one-time OAuth process with your Console account. You’ll need active billing at console.anthropic.com.
+
+​
+Core features and workflows
+Claude Code operates directly in your terminal, understanding your project context and taking real actions. No need to manually add files to context - Claude will explore your codebase as needed. Claude Code uses claude-3-7-sonnet-20250219 by default.
+
+​
+Security and privacy by design
+Your code’s security is paramount. Claude Code’s architecture ensures:
+
+Direct API connection: Your queries go straight to Anthropic’s API without intermediate servers
+Works where you work: Operates directly in your terminal
+Understands context: Maintains awareness of your entire project structure
+Takes action: Performs real operations like editing files and creating commits
+​
+From questions to solutions in seconds
+
+# Ask questions about your codebase
+claude
+> how does our authentication system work?
+
+# Create a commit with one command
+claude commit
+
+# Fix issues across multiple files
+claude "fix the type errors in the auth module"
+​
+Initialize your project
+For first-time users, we recommend:
+
+Start Claude Code with claude
+Try a simple command like summarize this project
+Generate a CLAUDE.md project guide with /init
+Ask Claude to commit the generated CLAUDE.md file to your repository
+​
+Use Claude Code for common tasks
+Claude Code operates directly in your terminal, understanding your project context and taking real actions. No need to manually add files to context - Claude will explore your codebase as needed.
+
+​
+Understand unfamiliar code
+
+> what does the payment processing system do?
+> find where user permissions are checked
+> explain how the caching layer works
+​
+Automate Git operations
+
+> commit my changes
+> create a pr
+> which commit added tests for markdown back in December?
+> rebase on main and resolve any merge conflicts
+​
+Edit code intelligently
+
+> add input validation to the signup form
+> refactor the logger to use the new API
+> fix the race condition in the worker queue
+​
+Test and debug your code
+
+> run tests for the auth module and fix failures
+> find and fix security vulnerabilities
+> explain why this test is failing
+​
+Encourage deeper thinking
+For complex problems, explicitly ask Claude to think more deeply:
+
+
+> think about how we should architect the new payment service
+> think hard about the edge cases in our authentication flow
+​
+Control Claude Code with commands
+​
+CLI commands
+Command	Description	Example
+claude	Start interactive REPL	claude
+claude "query"	Start REPL with initial prompt	claude "explain this project"
+claude -p "query"	Run one-off query, then exit	claude -p "explain this function"
+cat file | claude -p "query"	Process piped content	cat logs.txt | claude -p "explain"
+claude config	Configure settings	claude config set --global theme dark
+claude update	Update to latest version	claude update
+claude mcp	Configure Model Context Protocol servers	See MCP section in tutorials
+CLI flags:
+
+--print: Print response without interactive mode
+--verbose: Enable verbose logging
+--dangerously-skip-permissions: Skip permission prompts (only in Docker containers without internet)
+​
+Slash commands
+Control Claude’s behavior within a session:
+
+Command	Purpose
+/bug	Report bugs (sends conversation to Anthropic)
+/clear	Clear conversation history
+/compact	Compact conversation to save context space
+/config	View/modify configuration
+/cost	Show token usage statistics
+/doctor	Checks the health of your Claude Code installation
+/help	Get usage help
+/init	Initialize project with CLAUDE.md guide
+/login	Switch Anthropic accounts
+/logout	Sign out from your Anthropic account
+/pr_comments	View pull request comments
+/review	Request code review
+/terminal-setup	Install Shift+Enter key binding for newlines (iTerm2 and VSCode only)
+​
+Manage permissions and security
+Claude Code uses a tiered permission system to balance power and safety:
+
+Tool Type	Example	Approval Required	”Yes, don’t ask again” Behavior
+Read-only	File reads, LS, Grep	No	N/A
+Bash Commands	Shell execution	Yes	Permanently per project directory and command
+File Modification	Edit/write files	Yes	Until session end
+​
+Tools available to Claude
+Claude Code has access to a set of powerful tools that help it understand and modify your codebase:
+
+Tool	Description	Permission Required
+AgentTool	Runs a sub-agent to handle complex, multi-step tasks	No
+BashTool	Executes shell commands in your environment	Yes
+GlobTool	Finds files based on pattern matching	No
+GrepTool	Searches for patterns in file contents	No
+LSTool	Lists files and directories	No
+FileReadTool	Reads the contents of files	No
+FileEditTool	Makes targeted edits to specific files	Yes
+FileWriteTool	Creates or overwrites files	Yes
+NotebookReadTool	Reads and displays Jupyter notebook contents	No
+NotebookEditTool	Modifies Jupyter notebook cells	Yes
+​
+Protect against prompt injection
+Prompt injection is a technique where an attacker attempts to override or manipulate an AI assistant’s instructions by inserting malicious text. Claude Code includes several safeguards against these attacks:
+
+Permission system: Sensitive operations require explicit approval
+Context-aware analysis: Detects potentially harmful instructions by analyzing the full request
+Input sanitization: Prevents command injection by processing user inputs
+Command blocklist: Blocks risky commands that fetch arbitrary content from the web like curl and wget
+Best practices for working with untrusted content:
+
+Review suggested commands before approval
+Avoid piping untrusted content directly to Claude
+Verify proposed changes to critical files
+Report suspicious behavior with /bug
+While these protections significantly reduce risk, no system is completely immune to all attacks. Always maintain good security practices when working with any AI tool.
+
+​
+Configure network access
+Claude Code requires access to:
+
+api.anthropic.com
+statsig.anthropic.com
+sentry.io
+Allowlist these URLs when using Claude Code in containerized environments.
+
+​
+Configure Claude Code
+Configure Claude Code by running claude config in your terminal, or the /config command when using the interactive REPL.
+
+​
+Configuration options
+Claude Code supports global and project-level configuration.
+
+To manage your configurations, use the following commands:
+
+List settings: claude config list
+See a setting: claude config get <key>
+Change a setting: claude config set <key> <value>
+Push to a setting (for lists): claude config add <key> <value>
+Remove from a setting (for lists): claude config remove <key> <value>
+By default config changes your project configuration. To manage your global configuration, use the --global (or -g) flag.
+
+​
+Global configuration
+To set a global configuration, use claude config set -g <key> <value>:
+
+Key	Value	Description
+autoUpdaterStatus	disabled or enabled	Enable or disable the auto-updater (default: enabled)
+preferredNotifChannel	iterm2, iterm2_with_bell, terminal_bell, or notifications_disabled	Where you want to receive notifications (default: iterm2)
+theme	dark, light, light-daltonized, or dark-daltonized	Color theme
+verbose	true or false	Whether to show full bash and command outputs (default: false)
+​
+Auto-updater permission options
+When Claude Code detects that it doesn’t have sufficient permissions to write to your global npm prefix directory (required for automatic updates), you’ll see a warning that points to this documentation page.
+
+​
+Recommended: Create a new user-writable npm prefix
+
+# First, save a list of your existing global packages for later migration
+npm list -g --depth=0 > ~/npm-global-packages.txt
+
+# Create a directory for your global packages
+mkdir -p ~/.npm-global
+
+# Configure npm to use the new directory path
+npm config set prefix ~/.npm-global
+
+# Note: Replace ~/.bashrc with ~/.zshrc, ~/.profile, or other appropriate file for your shell
+echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.bashrc
+
+# Apply the new PATH setting
+source ~/.bashrc
+
+# Optional: Reinstall your previous global packages in the new location
+# Look at ~/npm-global-packages.txt and install packages you want to keep
+# npm install -g package1 package2 package3...
+Why we recommend this option:
+
+Avoids modifying system directory permissions
+Creates a clean, dedicated location for your global npm packages
+Follows security best practices
+Since Claude Code is actively developing, we recommend setting up auto-updates using the recommended option above.
+
+​
+Project configuration
+Manage project configuration with claude config set <key> <value> (without the -g flag):
+
+Key	Value	Description
+allowedTools	array of tools	Which tools can run without manual approval
+ignorePatterns	array of glob strings	Which files/directories are ignored when using tools
+For example:
+
+
+# Let npm test to run without approval
+claude config add allowedTools "Bash(npm test)"
+
+# Let npm test and any of its sub-commands to run without approval
+claude config add allowedTools "Bash(npm test:*)"
+
+# Instruct Claude to ignore node_modules
+claude config add ignorePatterns node_modules
+claude config add ignorePatterns "node_modules/**"
+​
+Optimize your terminal setup
+Claude Code works best when your terminal is properly configured. Follow these guidelines to optimize your experience.
+
+Supported shells:
+
+Bash
+Zsh
+Fish
+​
+Themes and appearance
+Claude cannot control the theme of your terminal. That’s handled by your terminal application. You can match Claude Code’s theme to your terminal during onboarding or any time via the /config command
+
+​
+Line breaks
+You have several options for entering linebreaks into Claude Code:
+
+Quick escape: Type \ followed by Enter to create a newline
+Keyboard shortcut: Press Option+Enter (Meta+Enter) with proper configuration
+To set up Option+Enter in your terminal:
+
+For Mac Terminal.app:
+
+Open Settings → Profiles → Keyboard
+Check “Use Option as Meta Key”
+For iTerm2 and VSCode terminal:
+
+Open Settings → Profiles → Keys
+Under General, set Left/Right Option key to “Esc+”
+Tip for iTerm2 and VSCode users: Run /terminal-setup within Claude Code to automatically configure Shift+Enter as a more intuitive alternative.
+
+​
+Notification setup
+Never miss when Claude completes a task with proper notification configuration:
+
+Terminal bell notifications
+Enable sound alerts when tasks complete:
+
+
+claude config set --global preferredNotifChannel terminal_bell
+For macOS users: Don’t forget to enable notification permissions in System Settings → Notifications → [Your Terminal App].
+
+iTerm 2 system notifications
+For iTerm 2 alerts when tasks complete:
+
+Open iTerm 2 Preferences
+Navigate to Profiles → Terminal
+Enable “Silence bell” and “Send notification when idle”
+Set your preferred notification delay
+Note that these notifications are specific to iTerm 2 and not available in the default macOS Terminal.
+
+​
+Handling large inputs
+When working with extensive code or long instructions:
+
+Avoid direct pasting: Claude Code may struggle with very long pasted content
+Use file-based workflows: Write content to a file and ask Claude to read it
+Be aware of VS Code limitations: The VS Code terminal is particularly prone to truncating long pastes
+By configuring these settings, you’ll create a smoother, more efficient workflow with Claude Code.

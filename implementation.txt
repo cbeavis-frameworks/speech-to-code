@@ -1,0 +1,182 @@
+Below is a high-level architecture that meets your three design goals:
+
+1) Using function calling for standardized “run command” instructions.  
+2) Employing two AI agents:  
+   – Conversation Agent (handles user ↔ terminal + handoff to Planning/Claude)  
+   – Planning Agent (manages project plan & long-term scope)  
+3) Potentially leveraging the Realtime API’s “out-of-band” responses to separate user-facing dialogue from agent-to-agent or agent-to-terminal coordination.
+
+────────────────────────────────────────────────────────────────────────
+A. Overview of the Multi-Agent Flow
+────────────────────────────────────────────────────────────────────────
+1. macOS Speech Recognition gathers voice and converts it to text.  
+2. That text is sent to the Conversation Agent.  
+3. The Conversation Agent:  
+   – Might talk to the Planning Agent to get or update the project plan.  
+   – Might talk to Claude in the Terminal to explore the codebase or perform tasks.  
+   – When code tasks are needed, it issues a standardized “function call” that your app interprets to run a command in the Terminal (which already has “claude” CLI running).  
+4. The Terminal’s output (including any clarifications or decisions from Claude Code) is funneled back to the Conversation Agent.  
+5. The Conversation Agent decides if user input is required or if it can automatically proceed with plan steps.  
+6. The Conversation Agent updates the user with a textual summary of what’s happening, or collects feedback if needed.
+
+────────────────────────────────────────────────────────────────────────
+B. Agents in Detail
+────────────────────────────────────────────────────────────────────────
+
+1. Conversation Agent
+   • Role: Orchestrates the real-time user conversation, bridging between user voice input, the Terminal/Claude, and the Planning Agent.  
+   • Receives user instructions (transcribed text).  
+   • Decides who to route them to:
+       – Claude (via standardized “run_command” function call) to do actual coding tasks.  
+       – Planning Agent (to refine or retrieve the high-level project plan).  
+   • Interprets feedback from Claude Code or Planning Agent. If there are questions requiring user input, the Conversation Agent prompts the user via voice or on-screen. Otherwise, it can auto-resolve decisions based on plan context.  
+
+2. Planning Agent
+   • Role: Maintains the project roadmap, tasks, and overall scope (long-term memory).  
+   • On app startup: The Conversation Agent asks the Planning Agent, “What is the current project status?”  
+       – If the plan is empty or incomplete, the Conversation Agent can prompt the user for the high-level goals and pass them back so the Planning Agent can initialize or update the plan.  
+   • The Planning Agent might store details in a local database or a file.  
+   • The Conversation Agent periodically checks in—e.g., “We just finished a feature. Mark it done. What’s next?”  
+
+Note: Both the Conversation and Planning Agents can run via the OpenAI Realtime API (GPT-4o or GPT-4o-mini). Each can have separate sessions. Alternatively, you can unify them in a single Realtime session with out-of-band responses, but typically, you’d have two separate connections/spaces (one for each agent) for clarity.
+
+────────────────────────────────────────────────────────────────────────
+C. Terminal & Claude Code Integration
+────────────────────────────────────────────────────────────────────────
+
+1. Terminal Pre-Start
+   • Your macOS app automatically opens a Terminal window and runs “claude” so that the terminal session is in the Claude Code CLI REPL.  
+   • The Terminal Controller references that pre-started session. Any “command” the Conversation Agent calls is literally typed into that REPL.  
+
+2. Standardized Function Calling
+   • The Conversation Agent has a “run_command” or “send_to_terminal” function in its function schema.  
+   • Example function definition in your session instructions might be:
+     {
+       "name": "run_command",
+       "description": "Send a command string to the Terminal, which is already running the Claude CLI.",
+       "parameters": {
+         "type": "object",
+         "properties": {
+           "command": {
+             "type": "string",
+             "description": "The command text to submit in the Claude Code REPL."
+           }
+         },
+         "required": ["command"]
+       }
+     }
+   • Whenever your GPT-4o-based Conversation Agent decides to run or query something in the Claude Code console, it calls run_command(command="test auth module" or "commit" or "help").  
+
+3. TerminalController
+   • Watches for the function call "run_command" in the conversation.  
+   • On receiving it, it simulates keystrokes in Terminal (or uses AppleScript) to type the command and press Enter.  
+   • Captures Terminal output and streams it back to the Conversation Agent as a text snippet, possibly using out-of-band conversation items or a normal conversation item.  
+
+4. Claude Output → Follow-up
+   • If Claude Code asks a clarifying question or presents multiple choices, the Terminal Controller captures that textual question.  
+   • The Conversation Agent sees the question, decides if it can auto-answer based on the plan or it needs user input.  
+
+────────────────────────────────────────────────────────────────────────
+D. Multi-Agent Interactions
+────────────────────────────────────────────────────────────────────────
+
+Typical Startup Flow:
+1. Your Mac app boots.  
+2. The Conversation Agent session is created, the Planning Agent session is created.  
+3. The Conversation Agent queries Planning Agent with something like:  
+   response.create { … "input": [ {"role":"system", "content":"Summarize the current plan or tasks."} ] }  
+   or an out-of-band request if you prefer.  
+4. Planning Agent responds with either an existing plan or “No plan is found.”  
+5. Conversation Agent checks with the Terminal/Claude as well:  
+   run_command("ls") or run_command("repo summary") to get a high-level sense of code structure.  
+6. If both come back “Nothing major to report,” the Conversation Agent asks user: “What do you want to build next?”  
+7. The user states “We want a new microservice that ….”  
+8. The Conversation Agent sends that detail to the Planning Agent, which updates the plan and returns a tasks overview.  
+9. From that point, the Conversation Agent coordinates with Claude in the Terminal to implement tasks step by step, checking with the plan as needed.
+
+Example Multi-Agent Decision:
+• If Claude Code says, “We’re about to rename 50 files. Proceed? (y/N),” the Terminal output is captured.  
+• Conversation Agent sees it as a clarifying question. It consults the Planning Agent: “Are these file renames consistent with the plan?”  
+   – If yes, auto-confirm. If ambiguous, the Conversation Agent asks the user verbally: “Claude is renaming 50 files with a new naming scheme. Should we proceed?”  
+
+────────────────────────────────────────────────────────────────────────
+E. Out-of-Band Responses (Realtime API)
+────────────────────────────────────────────────────────────────────────
+
+1. Realtime API Concept
+   • The “conversation: none” or “response.conversation: none” approach lets you create a “Response” that does not get appended to the user’s main conversation thread.  
+   • You can use this to:  
+     – Have the Conversation Agent talk privately to the Planning Agent (or vice versa) so that these interactions do not confuse your user-facing conversation.  
+     – Maintain a lightweight user-facing transcript separate from behind-the-scenes agent-to-agent queries.  
+
+2. Implementation Sketch
+   • For the Conversation Agent session, your user-facing messages might go into the default conversation.  
+   • When you want to talk to the Planning Agent or send an out-of-band command to Claude, you do “response.create” with "conversation": "none" (or a separate conversation ID).  
+   • Any returned data from that out-of-band request you can parse in Swift (or your orchestrator code) without polluting the main user chat transcript.
+
+3. Decisions to Make
+   • Do you prefer each agent to have its own Realtime session or do you want them to share a single session with multiple out-of-band calls?  
+   • Typically, separate sessions are simpler to maintain logically, but “out-of-band” is a creative way to keep it in one session.  
+
+────────────────────────────────────────────────────────────────────────
+F. Putting It All Together
+────────────────────────────────────────────────────────────────────────
+
+Below is a step-by-step illustration:
+
+1. Voice → Text → Conversation Agent
+   a) macOS speech recognition returns “We need a new payment module.”  
+   b) Swift code sends that text to the Conversation Agent’s Realtime session.  
+
+2. Conversation Agent → Planning Agent
+   a) The Conversation Agent uses either direct Realtime calls or out-of-band requests:  
+      response.create {
+        "response": {
+          "conversation": "none",
+          "modalities": ["text"],
+          "instructions": "Please update our plan with new Payment Module tasks."
+        }
+      }  
+   b) The Planning Agent updates or returns the updated plan.  
+
+3. Conversation Agent → Terminal
+   a) The agent decides we need to see the code layout. In the user-facing conversation, it calls a function:  
+      {
+        "name": "run_command",
+        "arguments": {
+          "command": "ls" 
+        }
+      }  
+   b) Swift code receives this function, calls TerminalController, which inserts “ls” into the pre-running Claude Code REPL.  
+
+4. Terminal Output → Conversation Agent
+   a) Terminal outputs “auth/  payments/  readme.md ….”  
+   b) Swift captures that text and sends it back to the Conversation Agent, either appended to the main conversation or as another out-of-band item.  
+
+5. If Claude wants user input or the Planning Agent’s input:
+   a) The Terminal might say, “Proceed with rewriting Payment class? (y/N)”.  
+   b) The Conversation Agent sees it. Possibly checks the plan with the Planning Agent. If the plan says “Yes, Payment refactor is next,” the Conversation Agent automatically calls run_command("y").  
+   c) Or if the plan is unclear, the agent prompts the user: “Claude wants to rewrite Payment class. Proceed?”  
+
+6. Final user updates
+   a) The Conversation Agent occasionally returns consolidated messages, e.g., “We added the new payment module and updated the plan for next steps.”  
+   b) The user can add more tasks by speaking another request.
+
+────────────────────────────────────────────────────────────────────────
+G. Summary
+────────────────────────────────────────────────────────────────────────
+
+• You have two AI agents:  
+  1) Conversation Agent → user-facing, orchestrates everything, uses function calling to run terminal commands in a pre-started “claude” REPL, optionally gating or auto-confirming decisions.  
+  2) Planning Agent → project plan knowledge, updates tasks, organizes big-picture goals.  
+
+• You standardize calls to the Terminal by implementing a “run_command” function definition in your Conversation Agent. The conversation agent’s Realtime session can produce out-of-band calls to the Planning Agent or to the Terminal. Alternatively, each agent can have its own session.  
+
+• The Realtime API’s out-of-band support (response.conversation=“none”) can segregate user vs. agent-to-agent chatter, so you keep your main chat clean and show only relevant user messages.  
+
+• This architecture ensures the following:  
+  – The user sees one main conversation with the Conversation Agent.  
+  – Behind the scenes, the agent consults the Planning Agent or runs commands via the Terminal.  
+  – The agent can either request user input or auto-confirm tasks based on plan alignment.
+
+This approach should deliver the flexible, multi-agent workflow you’re after—function calling for Terminal commands, a dedicated plan manager, and the ability to channel different streams of conversation using the Realtime API’s out-of-band capabilities.
