@@ -4,5 +4,9 @@
 <dict>
     <key>NSAppleEventsUsageDescription</key>
     <string>This app needs to control Terminal.app to provide terminal integration features.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>This app needs microphone access to enable voice control for coding.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>This app needs speech recognition to convert your voice commands into coding actions.</string>
 </dict>
 </plist>
