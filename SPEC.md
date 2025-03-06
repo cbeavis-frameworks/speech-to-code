@@ -29,17 +29,44 @@ Provides a user interface for interacting with Terminal.app from within the Spee
 - Shows interactive controls when Terminal is in interactive mode
 - Displays summarized Terminal activity
 
-### 3. Helper Scripts
+### 3. Multi-Agent Architecture
+SpeechToCode implements a multi-agent architecture to provide a seamless voice-controlled coding experience:
+
+#### 3.1 Conversation Agent
+- Handles user interaction and orchestrates workflow
+- Processes voice commands and generates responses
+- Communicates with the Terminal Controller to execute commands
+- Manages communication with the Planning Agent
+
+#### 3.2 Planning Agent
+- Maintains project context and long-term memory
+- Tracks tasks and project status
+- Provides context for the Conversation Agent
+- Helps with decision making for complex operations
+
+### 4. API Integrations
+
+#### 4.1 OpenAI Realtime API
+- Provides real-time AI processing for voice commands
+- Enables function calling for terminal commands
+- Supports out-of-band responses for agent-to-agent communication
+
+#### 4.2 Anthropic Claude Code CLI
+- Provides code-specific AI capabilities
+- Integrates with the Terminal Controller for code analysis and generation
+
+### 5. Helper Scripts
 - **terminal_helper.sh**: Bash script that handles low-level Terminal interactions using AppleScript
   - Sends commands to Terminal.app
   - Sends keystrokes for interactive prompts
   - Reads Terminal content
   - Checks Terminal status
 
-### 4. Permissions and Security
+### 6. Permissions and Security
 - Requires Accessibility permissions to control Terminal.app
 - Uses AppleScript for Terminal interaction
 - Includes proper entitlements for automation
+- Securely manages API keys for OpenAI and Anthropic
 
 ## Technical Implementation
 
@@ -56,11 +83,37 @@ Provides a user interface for interacting with Terminal.app from within the Spee
 3. User selects a response (or AI agent determines appropriate response)
 4. TerminalController sends the corresponding keystroke to Terminal.app
 
+### Multi-Agent Communication Flow
+1. User speaks a command → Speech recognition converts to text
+2. Text sent to Conversation Agent via Realtime API
+3. Conversation Agent processes request and may:
+   - Query Planning Agent for context
+   - Issue terminal commands via function calling
+   - Generate direct responses to the user
+4. Terminal Controller executes commands in Terminal (with Claude Code)
+5. Terminal output is captured and returned to Conversation Agent
+6. Conversation Agent decides next steps based on terminal output and plan
+7. Agent provides voice and visual feedback to the user
+
 ### AI Integration Points
 - Terminal output analysis for context understanding
 - Interactive prompt detection and option extraction
 - Decision making for automated responses to prompts
 - Command generation based on natural language input
+- Project context management and task tracking
+
+## Implementation Status
+
+### Completed Components
+- **Terminal Controller**: Basic implementation for controlling Terminal.app
+- **Terminal View**: User interface for terminal interaction
+- **Project Configuration**: API dependencies, keys, and permissions (March 6, 2025)
+
+### In Progress
+- Terminal Controller Enhancements for Claude Code CLI
+- AI Agent Models implementation
+- Conversation Agent implementation
+- Planning Agent implementation
 
 ## Future Enhancements
 1. **Enhanced Pattern Recognition**: Improve detection of various terminal prompts
@@ -68,9 +121,12 @@ Provides a user interface for interacting with Terminal.app from within the Spee
 3. **Context-Aware Suggestions**: Provide intelligent suggestions based on terminal history
 4. **Custom Terminal Profiles**: Support for different terminal configurations
 5. **Multi-Window Support**: Control multiple terminal windows simultaneously
+6. **Voice Output**: Text-to-speech for agent responses
 
 ## Technical Requirements
-- macOS 11.0 or later
-- Swift 5.3+
+- macOS 14.0 or later
+- Swift 5.9+
 - Terminal.app accessibility permissions
 - AppleScript automation permissions
+- OpenAI API key
+- Anthropic API key

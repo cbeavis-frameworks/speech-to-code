@@ -5,6 +5,23 @@ All notable changes to the SpeechToCode project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2025-03-06
+
+### Added
+- Project configuration for multi-agent architecture (Phase 1.1)
+- OpenAI API client dependencies (WebSocketKit, NIO, AsyncHTTPClient)
+- Config.swift for managing API keys and settings
+- Environment variables setup with .env.template
+- Updated entitlements for network access, file access, and microphone access
+- Usage descriptions in Info.plist for microphone and speech recognition
+- ConfigurationTests.swift for testing project configuration
+- test-phase-1-1.swift command-line test script
+
+### Changed
+- Updated .gitignore to exclude .env file with sensitive API keys
+- Updated SPEC.md to include multi-agent architecture details
+- Updated plan.txt to mark Phase 1.1 as completed
+
 ## [0.2.0] - 2025-03-05
 
 ### Added
