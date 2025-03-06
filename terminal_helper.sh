@@ -20,6 +20,20 @@ send_command() {
 EOF
 }
 
+# Function to send a Claude-specific command to Terminal.app
+# This handles the special formatting and options for Claude CLI
+claude_command() {
+    local command="$1"
+    local options="$2"
+    
+    # If options are provided, include them
+    if [ -n "$options" ]; then
+        send_command "claude $options \"$command\""
+    else
+        send_command "claude \"$command\""
+    fi
+}
+
 # Function to send a specific keystroke to Terminal.app
 send_keystroke() {
     local key="$1"
@@ -101,6 +115,53 @@ read_terminal_content() {
 EOF
 }
 
+# Function to detect if Terminal is showing a Claude CLI prompt
+detect_claude_prompt() {
+    local terminal_content=$(read_terminal_content)
+    
+    # Check for common Claude CLI prompt patterns
+    if echo "$terminal_content" | grep -q -E '(Claude Code|>|/bug|/clear|/compact|/config|/cost|/doctor|/help|/init|/login|/logout|/pr_comments|/review|/terminal-setup)'; then
+        echo "claude_prompt_detected"
+    else
+        echo "no_claude_prompt"
+    fi
+}
+
+# Function to handle Claude CLI specific interactions
+handle_claude() {
+    local action="$1"
+    shift
+    
+    case "$action" in
+        "init")
+            # Initialize Claude CLI in the current directory
+            send_command "claude"
+            ;;
+        "commit")
+            # Use Claude to create a commit
+            send_command "claude commit"
+            ;;
+        "slash_command")
+            # Send a slash command to Claude
+            local slash_cmd="$1"
+            send_command "/$slash_cmd"
+            ;;
+        "interrupt")
+            # Interrupt Claude with Ctrl+C
+            osascript <<EOF
+            tell application "Terminal" to activate
+            delay 0.2
+            tell application "System Events" to tell process "Terminal"
+                key code 0 using control down  # Ctrl+A (ASCII code 0 is 'a')
+            end tell
+EOF
+            ;;
+        *)
+            echo "Unknown Claude action: $action"
+            ;;
+    esac
+}
+
 # Function to check if Terminal.app is running
 is_terminal_running() {
     local running=$(osascript <<EOF
@@ -122,6 +183,9 @@ main() {
         "send_command")
             send_command "$@"
             ;;
+        "claude_command")
+            claude_command "$@"
+            ;;
         "send_keystroke")
             send_keystroke "$@"
             ;;
@@ -131,9 +195,15 @@ main() {
         "is_running")
             is_terminal_running
             ;;
+        "detect_claude_prompt")
+            detect_claude_prompt
+            ;;
+        "handle_claude")
+            handle_claude "$@"
+            ;;
         *)
             echo "Unknown action: $action"
-            echo "Usage: $0 [send_command|send_keystroke|read_content|is_running] [arguments]"
+            echo "Usage: $0 [send_command|claude_command|send_keystroke|read_content|is_running|detect_claude_prompt|handle_claude] [arguments]"
             exit 1
             ;;
     esac
