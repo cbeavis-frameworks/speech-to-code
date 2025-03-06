@@ -15,11 +15,11 @@ This implementation plan outlines the steps needed to enhance the SpeechToCode a
 - [x] Set up environment variables for API access
 - [x] Update project entitlements for necessary permissions
 
-### 1.2. Terminal Controller Enhancements
-- [ ] Extend TerminalController to support Claude Code CLI-specific commands
-- [ ] Add detection for Claude Code interactive prompts
-- [ ] Implement Claude Code command history tracking
-- [ ] Create specialized response parsing for Claude Code output
+### 1.2. Terminal Controller Enhancements ✅
+- [x] Extend TerminalController to support Claude Code CLI-specific commands
+- [x] Add detection for Claude Code interactive prompts
+- [x] Implement Claude Code command history tracking
+- [x] Create specialized response parsing for Claude Code output
 
 ### 1.3. AI Agent Models
 - [ ] Create RealtimeSession model for managing OpenAI Realtime API sessions

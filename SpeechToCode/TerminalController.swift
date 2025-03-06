@@ -8,12 +8,15 @@ class TerminalController: ObservableObject {
     @Published var summary: String = ""
     @Published var permissionStatus: PermissionStatus = .unknown
     @Published var isInteractiveMode: Bool = false
+    @Published var isClaudeMode: Bool = false
+    @Published var claudeCommandHistory: [String] = []
+    @Published var lastClaudeResponse: String = ""
     
     private var outputBuffer: String = ""
     private var cancellables = Set<AnyCancellable>()
     private var pollingTimer: Timer?
     private var lastTerminalContent: String = ""
-    private let helperScriptPath = "/Users/chrisbeavis/Desktop/SpeechToCode/terminal_helper.sh"
+    let helperScriptPath = "/Users/chrisbeavis/Desktop/SpeechToCode/terminal_helper.sh"
     
     enum PermissionStatus {
         case unknown
@@ -78,6 +81,9 @@ class TerminalController: ObservableObject {
                 // Check for interactive prompts
                 checkForInteractivePrompts(content)
                 
+                // Check for Claude prompts
+                detectClaudePrompt(content)
+                
                 if content != lastTerminalContent {
                     DispatchQueue.main.async { [weak self] in
                         guard let self = self else { return }
@@ -88,6 +94,11 @@ class TerminalController: ObservableObject {
                             if !newContent.isEmpty {
                                 self.terminalOutput += newContent
                                 self.outputBuffer += newContent
+                                
+                                // If in Claude mode, parse the response
+                                if self.isClaudeMode {
+                                    self.parseClaudeResponse(newContent)
+                                }
                             }
                         } else {
                             self.terminalOutput = content
@@ -128,6 +139,39 @@ class TerminalController: ObservableObject {
         
         DispatchQueue.main.async {
             self.isInteractiveMode = isInteractive
+        }
+    }
+    
+    // Detect Claude Code CLI prompts
+    public func detectClaudePrompt(_ content: String) {
+        // Claude CLI specific patterns
+        let claudeInteractivePatterns = [
+            "Claude Code",
+            "> ",
+            "/bug",
+            "/clear",
+            "/compact",
+            "/config",
+            "/cost",
+            "/doctor",
+            "/help",
+            "/init",
+            "/login",
+            "/logout",
+            "/pr_comments",
+            "/review",
+            "/terminal-setup"
+        ]
+        
+        let isClaudePrompt = claudeInteractivePatterns.contains { pattern in
+            content.contains(pattern)
+        }
+        
+        DispatchQueue.main.async {
+            self.isClaudeMode = isClaudePrompt
+            if isClaudePrompt {
+                self.isInteractiveMode = true
+            }
         }
     }
     
@@ -183,6 +227,138 @@ class TerminalController: ObservableObject {
             DispatchQueue.main.async {
                 self.terminalOutput += "Error: \(error.localizedDescription)\n"
             }
+        }
+    }
+    
+    // Send a Claude-specific command to Terminal.app
+    func sendClaudeCommand(_ command: String, options: String = "") {
+        guard isConnected else { return }
+        
+        // Track command in history
+        trackClaudeCommand(command)
+        
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/bin/bash")
+        task.arguments = [helperScriptPath, "claude_command", command, options]
+        
+        do {
+            try task.run()
+            task.waitUntilExit()
+            
+            if task.terminationStatus == 0 {
+                DispatchQueue.main.async {
+                    self.terminalOutput += "> claude \"\(command)\"\n"
+                }
+            } else {
+                DispatchQueue.main.async {
+                    self.terminalOutput += "Error sending Claude command: \(command)\n"
+                }
+            }
+        } catch {
+            DispatchQueue.main.async {
+                self.terminalOutput += "Error: \(error.localizedDescription)\n"
+            }
+        }
+    }
+    
+    // Track Claude commands in history
+    func trackClaudeCommand(_ command: String) {
+        DispatchQueue.main.async {
+            self.claudeCommandHistory.append(command)
+            
+            // Keep history at a reasonable size
+            if self.claudeCommandHistory.count > 50 {
+                self.claudeCommandHistory.removeFirst()
+            }
+        }
+    }
+    
+    // Parse Claude's response to extract structured information
+    func parseClaudeResponse(_ response: String) {
+        // Store the raw response
+        lastClaudeResponse = response
+        
+        // Extract code blocks
+        let codeBlockPattern = #"```(?:\w+)?\s*\n([\s\S]*?)\n```"#
+        if let regex = try? NSRegularExpression(pattern: codeBlockPattern) {
+            let nsString = response as NSString
+            let matches = regex.matches(in: response, range: NSRange(location: 0, length: nsString.length))
+            
+            for match in matches {
+                if match.numberOfRanges > 1 {
+                    let codeRange = match.range(at: 1)
+                    let code = nsString.substring(with: codeRange)
+                    print("Extracted code block: \(code)")
+                    // You could store these code blocks in an array if needed
+                }
+            }
+        }
+    }
+    
+    // Initialize Claude CLI in the current directory
+    func initializeClaudeCLI() {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/bin/bash")
+        task.arguments = [helperScriptPath, "handle_claude", "init"]
+        
+        do {
+            try task.run()
+            task.waitUntilExit()
+            
+            if task.terminationStatus == 0 {
+                DispatchQueue.main.async {
+                    self.isClaudeMode = true
+                    self.terminalOutput += "Claude CLI initialized\n"
+                }
+            } else {
+                DispatchQueue.main.async {
+                    self.terminalOutput += "Error initializing Claude CLI\n"
+                }
+            }
+        } catch {
+            DispatchQueue.main.async {
+                self.terminalOutput += "Error: \(error.localizedDescription)\n"
+            }
+        }
+    }
+    
+    // Execute a Claude slash command
+    func executeClaudeSlashCommand(_ command: String) {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/bin/bash")
+        task.arguments = [helperScriptPath, "handle_claude", "slash_command", command]
+        
+        do {
+            try task.run()
+            task.waitUntilExit()
+            
+            if task.terminationStatus == 0 {
+                DispatchQueue.main.async {
+                    self.terminalOutput += "> /\(command)\n"
+                }
+            } else {
+                DispatchQueue.main.async {
+                    self.terminalOutput += "Error executing Claude slash command: \(command)\n"
+                }
+            }
+        } catch {
+            DispatchQueue.main.async {
+                self.terminalOutput += "Error: \(error.localizedDescription)\n"
+            }
+        }
+    }
+    
+    // Interrupt Claude if it's processing
+    func interruptClaude() {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/bin/bash")
+        task.arguments = [helperScriptPath, "handle_claude", "interrupt"]
+        
+        do {
+            try task.run()
+            task.waitUntilExit()
+        } catch {
+            print("Error interrupting Claude: \(error)")
         }
     }
     
