@@ -6,6 +6,16 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		DC54C4C62D7B560E00FF8897 /* NIO in Frameworks */ = {isa = PBXBuildFile; productRef = DC54C4C52D7B560E00FF8897 /* NIO */; };
+		DC54C4C82D7B560E00FF8897 /* NIOConcurrencyHelpers in Frameworks */ = {isa = PBXBuildFile; productRef = DC54C4C72D7B560E00FF8897 /* NIOConcurrencyHelpers */; };
+		DC54C4CA2D7B560E00FF8897 /* NIOCore in Frameworks */ = {isa = PBXBuildFile; productRef = DC54C4C92D7B560E00FF8897 /* NIOCore */; };
+		DC54C4CC2D7B560E00FF8897 /* NIOEmbedded in Frameworks */ = {isa = PBXBuildFile; productRef = DC54C4CB2D7B560E00FF8897 /* NIOEmbedded */; };
+		DC54C4CE2D7B560E00FF8897 /* NIOFoundationCompat in Frameworks */ = {isa = PBXBuildFile; productRef = DC54C4CD2D7B560E00FF8897 /* NIOFoundationCompat */; };
+		DC54C4D12D7B562F00FF8897 /* AsyncHTTPClient in Frameworks */ = {isa = PBXBuildFile; productRef = DC54C4D02D7B562F00FF8897 /* AsyncHTTPClient */; };
+		DC54C4D42D7B57E900FF8897 /* WebSocketKit in Frameworks */ = {isa = PBXBuildFile; productRef = DC54C4D32D7B57E900FF8897 /* WebSocketKit */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		DC54C3852D77583600FF8897 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -52,6 +62,13 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DC54C4CA2D7B560E00FF8897 /* NIOCore in Frameworks */,
+				DC54C4CE2D7B560E00FF8897 /* NIOFoundationCompat in Frameworks */,
+				DC54C4C62D7B560E00FF8897 /* NIO in Frameworks */,
+				DC54C4C82D7B560E00FF8897 /* NIOConcurrencyHelpers in Frameworks */,
+				DC54C4D12D7B562F00FF8897 /* AsyncHTTPClient in Frameworks */,
+				DC54C4D42D7B57E900FF8897 /* WebSocketKit in Frameworks */,
+				DC54C4CC2D7B560E00FF8897 /* NIOEmbedded in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -78,6 +95,7 @@
 				DC54C3732D77583400FF8897 /* SpeechToCode */,
 				DC54C3872D77583600FF8897 /* SpeechToCodeTests */,
 				DC54C3912D77583600FF8897 /* SpeechToCodeUITests */,
+				DC54C4D22D7B57E900FF8897 /* Frameworks */,
 				DC54C3722D77583400FF8897 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -90,6 +108,13 @@
 				DC54C38E2D77583600FF8897 /* SpeechToCodeUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		DC54C4D22D7B57E900FF8897 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -112,6 +137,13 @@
 			);
 			name = SpeechToCode;
 			packageProductDependencies = (
+				DC54C4C52D7B560E00FF8897 /* NIO */,
+				DC54C4C72D7B560E00FF8897 /* NIOConcurrencyHelpers */,
+				DC54C4C92D7B560E00FF8897 /* NIOCore */,
+				DC54C4CB2D7B560E00FF8897 /* NIOEmbedded */,
+				DC54C4CD2D7B560E00FF8897 /* NIOFoundationCompat */,
+				DC54C4D02D7B562F00FF8897 /* AsyncHTTPClient */,
+				DC54C4D32D7B57E900FF8897 /* WebSocketKit */,
 			);
 			productName = SpeechToCode;
 			productReference = DC54C3712D77583400FF8897 /* SpeechToCode.app */;
@@ -195,6 +227,11 @@
 			);
 			mainGroup = DC54C3682D77583400FF8897;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				DC54C4C32D7B55F300FF8897 /* XCRemoteSwiftPackageReference "websocket-kit" */,
+				DC54C4C42D7B560E00FF8897 /* XCRemoteSwiftPackageReference "swift-nio" */,
+				DC54C4CF2D7B562F00FF8897 /* XCRemoteSwiftPackageReference "async-http-client" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = DC54C3722D77583400FF8897 /* Products */;
 			projectDirPath = "";
@@ -551,6 +588,71 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		DC54C4C32D7B55F300FF8897 /* XCRemoteSwiftPackageReference "websocket-kit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/vapor/websocket-kit.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.15.0;
+			};
+		};
+		DC54C4C42D7B560E00FF8897 /* XCRemoteSwiftPackageReference "swift-nio" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-nio.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.81.0;
+			};
+		};
+		DC54C4CF2D7B562F00FF8897 /* XCRemoteSwiftPackageReference "async-http-client" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/swift-server/async-http-client.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.25.2;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		DC54C4C52D7B560E00FF8897 /* NIO */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DC54C4C42D7B560E00FF8897 /* XCRemoteSwiftPackageReference "swift-nio" */;
+			productName = NIO;
+		};
+		DC54C4C72D7B560E00FF8897 /* NIOConcurrencyHelpers */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DC54C4C42D7B560E00FF8897 /* XCRemoteSwiftPackageReference "swift-nio" */;
+			productName = NIOConcurrencyHelpers;
+		};
+		DC54C4C92D7B560E00FF8897 /* NIOCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DC54C4C42D7B560E00FF8897 /* XCRemoteSwiftPackageReference "swift-nio" */;
+			productName = NIOCore;
+		};
+		DC54C4CB2D7B560E00FF8897 /* NIOEmbedded */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DC54C4C42D7B560E00FF8897 /* XCRemoteSwiftPackageReference "swift-nio" */;
+			productName = NIOEmbedded;
+		};
+		DC54C4CD2D7B560E00FF8897 /* NIOFoundationCompat */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DC54C4C42D7B560E00FF8897 /* XCRemoteSwiftPackageReference "swift-nio" */;
+			productName = NIOFoundationCompat;
+		};
+		DC54C4D02D7B562F00FF8897 /* AsyncHTTPClient */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DC54C4CF2D7B562F00FF8897 /* XCRemoteSwiftPackageReference "async-http-client" */;
+			productName = AsyncHTTPClient;
+		};
+		DC54C4D32D7B57E900FF8897 /* WebSocketKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DC54C4C32D7B55F300FF8897 /* XCRemoteSwiftPackageReference "websocket-kit" */;
+			productName = WebSocketKit;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = DC54C3692D77583400FF8897 /* Project object */;
 }

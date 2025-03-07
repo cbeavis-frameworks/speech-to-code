@@ -1,7 +1,7 @@
 import Foundation
-// import NIO            // Temporarily commented for test build
-// import WebSocketKit
-// import NIOHTTP1
+import NIO
+import WebSocketKit
+import NIOHTTP1
 
 /// Model for managing OpenAI Realtime API sessions
 class RealtimeSession: ObservableObject {
@@ -21,34 +21,18 @@ class RealtimeSession: ObservableObject {
     private var apiKey: String?
     private var modelId: String
     private var sessionId: String?
-    // private var websocket: WebSocket?    // Temporarily commented for test build
-    // private var eventLoopGroup: EventLoopGroup?
+    private var websocket: WebSocket?
+    private var eventLoopGroup: EventLoopGroup?
     
-    /// Configuration options for the session
-    struct SessionConfig {
-        var instructions: String
-        var voice: String
-        var modalities: [String]
-        var temperature: Float
-        
-        /// Default configuration
-        static let `default` = SessionConfig(
-            instructions: "You are a helpful coding assistant.",
-            voice: "alloy",
-            modalities: ["text", "audio"],
-            temperature: 0.7
-        )
-    }
-    
-    /// Current session configuration
-    var config: SessionConfig
+    // Use the external configuration
+    private var config: RealtimeSessionConfig
     
     /// Initialize a new Realtime session
     /// - Parameters:
     ///   - apiKey: The OpenAI API key (if nil, will be retrieved from Config)
     ///   - modelId: The model ID to use (defaults to GPT-4o Realtime)
     ///   - config: Configuration options for the session
-    init(apiKey: String? = nil, modelId: String = "gpt-4o-realtime-preview-2024-12-17", config: SessionConfig = .default) {
+    init(apiKey: String? = nil, modelId: String = "gpt-4o-realtime-preview-2024-12-17", config: RealtimeSessionConfig) {
         self.apiKey = apiKey // ?? Config.shared.openAIApiKey
         self.modelId = modelId
         self.config = config

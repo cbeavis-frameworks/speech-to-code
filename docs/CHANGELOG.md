@@ -7,14 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.5.0] - 2025-03-07
 
-### Added
-- AI Agent Models implementation (Phase 1.3)
-- AgentMessage model for structured agent communication
-- RealtimeSession model for OpenAI Realtime API integration
-- ConversationAgent model for user interaction and workflow orchestration
-- PlanningAgent model for project context and long-term memory
-- FileBasedPlanStorage implementation for persistence
-- test-phase-1-3.swift command-line test script
+### Fixed
+- Properly integrated Swift Package dependencies (WebSocketKit, NIO, AsyncHTTPClient)
+- Fixed missing module errors for package dependencies
+- Configured proper package linkage for the project target
+- Enhanced RealtimeSession model to use Swift packages
+
+### Changed
+- Updated package management to use Xcode's native package system
+- Improved project structure for better package integration
 
 ## [0.4.0] - 2025-03-06
 

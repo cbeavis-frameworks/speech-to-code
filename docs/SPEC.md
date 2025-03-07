@@ -68,6 +68,20 @@ SpeechToCode implements a multi-agent architecture to provide a seamless voice-c
 - Includes proper entitlements for automation
 - Securely manages API keys for OpenAI and Anthropic
 
+## Dependencies
+SpeechToCode relies on several Swift packages to provide the necessary functionality:
+
+### Network & Real-time Communication 
+- **WebSocketKit** - Provides WebSocket communication for real-time interaction with the OpenAI API
+- **NIO** - Swift NIO framework for asynchronous networking
+- **AsyncHTTPClient** - Asynchronous HTTP client for Swift
+- **NIOFoundationCompat** - NIO integration with Foundation
+- **NIOConcurrencyHelpers** - Concurrency utilities for NIO
+- **NIOCore** - Core components of Swift NIO
+- **NIOEmbedded** - Embedded test utilities for NIO
+
+These dependencies are integrated directly into the Xcode project using Xcode's built-in package management system.
+
 ## Technical Implementation
 
 ### Terminal Interaction Flow
