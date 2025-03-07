@@ -1,7 +1,8 @@
 import Foundation
 
 /// Conversation agent model to handle user interaction and orchestrate workflow
-class ConversationAgent: ObservableObject {
+@available(macOS 10.15, *)
+class ConversationAgent: ObservableObject, @unchecked Sendable {
     /// Current state of the agent
     enum AgentState {
         case idle
@@ -51,7 +52,8 @@ class ConversationAgent: ObservableObject {
         // Create a user input message
         let userMessage = AgentMessage.userInput(userInput)
         
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
             self.messages.append(userMessage)
         }
         
@@ -86,7 +88,8 @@ class ConversationAgent: ObservableObject {
             content: command
         )
         
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
             self.messages.append(commandMessage)
         }
         
@@ -98,7 +101,8 @@ class ConversationAgent: ObservableObject {
             content: "[TEST MODE] Executed command: \(command)"
         )
         
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
             self.messages.append(responseMessage)
         }
         
@@ -120,7 +124,8 @@ class ConversationAgent: ObservableObject {
             metadata: ["arguments": arguments.description]
         )
         
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
             self.messages.append(functionMessage)
         }
         
@@ -133,7 +138,8 @@ class ConversationAgent: ObservableObject {
             metadata: ["function": functionName]
         )
         
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
             self.messages.append(resultMessage)
         }
         

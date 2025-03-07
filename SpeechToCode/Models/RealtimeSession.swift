@@ -88,11 +88,8 @@ class RealtimeSession: ObservableObject, @unchecked Sendable {
             // Construct the WebSocket URL with model parameter
             let wsURL = "wss://api.openai.com/v1/realtime?model=\(modelId)"
             
-            // Create HTTP client
-            let httpClient = HTTPClient(eventLoopGroupProvider: .shared(eventLoopGroup))
-            
             // Connect to WebSocket
-            try await WebSocketKit.WebSocket.connect(
+            try WebSocketKit.WebSocket.connect(
                 to: wsURL,
                 headers: [
                     "Authorization": "Bearer \(apiKey)",
@@ -168,7 +165,7 @@ class RealtimeSession: ObservableObject, @unchecked Sendable {
         do {
             let jsonData = try JSONSerialization.data(withJSONObject: sessionUpdateEvent)
             if let jsonString = String(data: jsonData, encoding: .utf8) {
-                websocket.send(jsonString)
+                try websocket.send(jsonString)
             }
         } catch {
             print("Error creating session update: \(error)")

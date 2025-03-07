@@ -30,7 +30,15 @@ class TerminalController: ObservableObject {
         // First check if Terminal.app is running
         if !isTerminalRunning() {
             // Launch Terminal if it's not running
-            NSWorkspace.shared.launchApplication("Terminal")
+            if #available(macOS 11.0, *) {
+                let terminalURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Terminal") ?? URL(fileURLWithPath: "/Applications/Utilities/Terminal.app")
+                NSWorkspace.shared.openApplication(at: terminalURL, 
+                                                  configuration: NSWorkspace.OpenConfiguration(),
+                                                  completionHandler: nil)
+            } else {
+                // Fallback for older versions
+                NSWorkspace.shared.launchApplication("Terminal")
+            }
             
             // Wait a moment for Terminal to launch
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
@@ -417,7 +425,15 @@ class TerminalController: ObservableObject {
     
     // Open Terminal.app
     func openTerminal() {
-        NSWorkspace.shared.launchApplication("Terminal")
+        if #available(macOS 11.0, *) {
+            let terminalURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Terminal") ?? URL(fileURLWithPath: "/Applications/Utilities/Terminal.app")
+            NSWorkspace.shared.openApplication(at: terminalURL, 
+                                              configuration: NSWorkspace.OpenConfiguration(), 
+                                              completionHandler: nil)
+        } else {
+            // Fallback for older versions
+            NSWorkspace.shared.launchApplication("Terminal")
+        }
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             self.connectToTerminal()
