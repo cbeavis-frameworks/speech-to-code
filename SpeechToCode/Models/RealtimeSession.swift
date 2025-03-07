@@ -6,13 +6,29 @@ import AsyncHTTPClient
 import NIOFoundationCompat
 
 /// Model for managing OpenAI Realtime API sessions
-class RealtimeSession: ObservableObject {
+@available(macOS 10.15, *)
+class RealtimeSession: ObservableObject, @unchecked Sendable {
     /// Current state of the Realtime session
-    enum SessionState {
+    enum SessionState: Equatable {
         case disconnected
         case connecting
         case connected
         case error(String)
+        
+        static func == (lhs: SessionState, rhs: SessionState) -> Bool {
+            switch (lhs, rhs) {
+            case (.disconnected, .disconnected):
+                return true
+            case (.connecting, .connecting):
+                return true
+            case (.connected, .connected):
+                return true
+            case (.error(let lhsError), .error(let rhsError)):
+                return lhsError == rhsError
+            default:
+                return false
+            }
+        }
     }
     
     /// Published properties for SwiftUI integration
@@ -55,41 +71,54 @@ class RealtimeSession: ObservableObject {
         }
         
         // Update state to connecting
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [self] in
             self.state = .connecting
         }
         
         do {
             // Create event loop group for the WebSocket
             eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1)
+            guard let eventLoopGroup = eventLoopGroup else {
+                DispatchQueue.main.async {
+                    self.state = .error("Failed to create event loop group")
+                }
+                return false
+            }
             
             // Construct the WebSocket URL with model parameter
             let wsURL = "wss://api.openai.com/v1/realtime?model=\(modelId)"
             
+            // Create HTTP client
+            let httpClient = HTTPClient(eventLoopGroupProvider: .shared(eventLoopGroup))
+            
             // Connect to WebSocket
-            websocket = try await WebSocket.connect(
+            try await WebSocketKit.WebSocket.connect(
                 to: wsURL,
                 headers: [
                     "Authorization": "Bearer \(apiKey)",
                     "OpenAI-Beta": "realtime=v1"
                 ],
                 configuration: .init(),
-                on: eventLoopGroup!
+                on: eventLoopGroup
             ) { [weak self] ws in
                 guard let self = self else { return }
+                self.websocket = ws
                 
                 // Set up message handler
-                ws.onText { _, text in
+                ws.onText { [weak self] _, text in
+                    guard let self = self else { return }
                     self.handleWebSocketMessage(text)
                 }
                 
                 // Set up binary handler for audio data
-                ws.onBinary { _, buffer in
+                ws.onBinary { [weak self] _, buffer in
+                    guard let self = self else { return }
                     self.handleBinaryData(buffer)
                 }
                 
                 // Set up close handler
-                ws.onClose.whenComplete { result in
+                ws.onClose.whenComplete { [weak self] result in
+                    guard let self = self else { return }
                     switch result {
                     case .success:
                         DispatchQueue.main.async {
@@ -113,7 +142,7 @@ class RealtimeSession: ObservableObject {
             
             return true
         } catch {
-            DispatchQueue.main.async {
+            DispatchQueue.main.async { [self] in
                 self.state = .error("Failed to connect: \(error.localizedDescription)")
             }
             return false
@@ -214,7 +243,8 @@ class RealtimeSession: ObservableObject {
            let text = delta["text"] as? String {
             
             // Update UI with text delta
-            DispatchQueue.main.async {
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
                 // If last message is from the same response, append the text
                 if let lastIndex = self.messages.lastIndex(where: { $0.metadata["responseId"] == responseId }) {
                     let updatedContent = self.messages[lastIndex].content + text
@@ -317,7 +347,8 @@ class RealtimeSession: ObservableObject {
     private func handleResponseDone(_ json: [String: Any]) {
         if let responseId = json["response_id"] as? String {
             // Update UI to indicate response completion
-            DispatchQueue.main.async {
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
                 // Find the last message with this responseId and mark it complete
                 if let lastIndex = self.messages.lastIndex(where: { $0.metadata["responseId"] == responseId }) {
                     var updatedMetadata = self.messages[lastIndex].metadata
@@ -374,7 +405,8 @@ class RealtimeSession: ObservableObject {
         
         do {
             // Add user message to the UI
-            DispatchQueue.main.async {
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
                 let userMessage = AgentMessage.userInput(text)
                 self.messages.append(userMessage)
             }
@@ -382,13 +414,13 @@ class RealtimeSession: ObservableObject {
             // Send conversation item event
             let conversationItemData = try JSONSerialization.data(withJSONObject: conversationItemEvent)
             if let conversationItemString = String(data: conversationItemData, encoding: .utf8) {
-                websocket.send(conversationItemString)
+                try await websocket.send(conversationItemString)
             }
             
             // Send response event
             let responseData = try JSONSerialization.data(withJSONObject: responseEvent)
             if let responseString = String(data: responseData, encoding: .utf8) {
-                websocket.send(responseString)
+                try await websocket.send(responseString)
             }
             
             return true
@@ -447,19 +479,24 @@ class RealtimeSession: ObservableObject {
         
         // If a specific function call is requested, set tool_choice
         if let functionCall = functionCall {
-            (responseEvent["response"] as? [String: Any])?["tool_choice"] = [
+            var responseDict = (responseEvent["response"] as? [String: Any]) ?? [:]
+            responseDict["tool_choice"] = [
                 "type": "function",
                 "function": [
                     "name": functionCall
                 ]
             ]
+            responseEvent["response"] = responseDict
         } else {
-            (responseEvent["response"] as? [String: Any])?["tool_choice"] = "auto"
+            var responseDict = (responseEvent["response"] as? [String: Any]) ?? [:]
+            responseDict["tool_choice"] = "auto"
+            responseEvent["response"] = responseDict
         }
         
         do {
             // Add user message to the UI
-            DispatchQueue.main.async {
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
                 let userMessage = AgentMessage.userInput(text)
                 self.messages.append(userMessage)
             }
@@ -467,13 +504,13 @@ class RealtimeSession: ObservableObject {
             // Send conversation item event
             let conversationItemData = try JSONSerialization.data(withJSONObject: conversationItemEvent)
             if let conversationItemString = String(data: conversationItemData, encoding: .utf8) {
-                websocket.send(conversationItemString)
+                try await websocket.send(conversationItemString)
             }
             
             // Send response event
             let responseData = try JSONSerialization.data(withJSONObject: responseEvent)
             if let responseString = String(data: responseData, encoding: .utf8) {
-                websocket.send(responseString)
+                try await websocket.send(responseString)
             }
             
             return true
@@ -495,18 +532,18 @@ class RealtimeSession: ObservableObject {
         }
         
         // Create a conversation item with the function result
-        var content: [String: Any] = [
-            "type": "function_result",
-            "function": [
-                "name": functionName
-            ]
-        ]
+        var functionDict: [String: Any] = ["name": functionName]
         
         if let error = error {
-            content["function"]?["error"] = error
+            functionDict["error"] = error
         } else {
-            content["function"]?["result"] = result
+            functionDict["result"] = result
         }
+        
+        let content: [String: Any] = [
+            "type": "function_result",
+            "function": functionDict
+        ]
         
         let conversationItemEvent: [String: Any] = [
             "type": "conversation.item.create",
@@ -529,13 +566,13 @@ class RealtimeSession: ObservableObject {
             // Send conversation item event
             let conversationItemData = try JSONSerialization.data(withJSONObject: conversationItemEvent)
             if let conversationItemString = String(data: conversationItemData, encoding: .utf8) {
-                websocket.send(conversationItemString)
+                try await websocket.send(conversationItemString)
             }
             
             // Send response event
             let responseData = try JSONSerialization.data(withJSONObject: responseEvent)
             if let responseString = String(data: responseData, encoding: .utf8) {
-                websocket.send(responseString)
+                try await websocket.send(responseString)
             }
             
             return true
