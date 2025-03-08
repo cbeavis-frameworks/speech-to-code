@@ -89,7 +89,7 @@ class RealtimeSession: ObservableObject, @unchecked Sendable {
             let wsURL = "wss://api.openai.com/v1/realtime?model=\(modelId)"
             
             // Connect to WebSocket
-            try WebSocketKit.WebSocket.connect(
+            let webSocketPromise = WebSocketKit.WebSocket.connect(
                 to: wsURL,
                 headers: [
                     "Authorization": "Bearer \(apiKey)",
@@ -137,6 +137,9 @@ class RealtimeSession: ObservableObject, @unchecked Sendable {
                 self.configureSession()
             }
             
+            // Wait for connection to complete or fail
+            _ = try? await webSocketPromise.get()
+            
             return true
         } catch {
             DispatchQueue.main.async { [self] in
@@ -165,7 +168,7 @@ class RealtimeSession: ObservableObject, @unchecked Sendable {
         do {
             let jsonData = try JSONSerialization.data(withJSONObject: sessionUpdateEvent)
             if let jsonString = String(data: jsonData, encoding: .utf8) {
-                try websocket.send(jsonString)
+                websocket.send(jsonString)
             }
         } catch {
             print("Error creating session update: \(error)")
