@@ -138,9 +138,15 @@ class RealtimeSession: ObservableObject, @unchecked Sendable {
             }
             
             // Wait for connection to complete or fail
-            _ = try? await webSocketPromise.get()
-            
-            return true
+            do {
+                _ = try await webSocketPromise.get()
+                return true
+            } catch {
+                DispatchQueue.main.async { [self] in
+                    self.state = .error("Failed to connect: \(error.localizedDescription)")
+                }
+                return false
+            }
         } catch {
             DispatchQueue.main.async { [self] in
                 self.state = .error("Failed to connect: \(error.localizedDescription)")
