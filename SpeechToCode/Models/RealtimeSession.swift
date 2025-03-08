@@ -75,78 +75,71 @@ class RealtimeSession: ObservableObject, @unchecked Sendable {
             self.state = .connecting
         }
         
-        do {
-            // Create event loop group for the WebSocket
-            eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1)
-            guard let eventLoopGroup = eventLoopGroup else {
-                DispatchQueue.main.async {
-                    self.state = .error("Failed to create event loop group")
-                }
-                return false
+        // Create event loop group for the WebSocket
+        eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1)
+        guard let eventLoopGroup = eventLoopGroup else {
+            DispatchQueue.main.async {
+                self.state = .error("Failed to create event loop group")
+            }
+            return false
+        }
+        
+        // Construct the WebSocket URL with model parameter
+        let wsURL = "wss://api.openai.com/v1/realtime?model=\(modelId)"
+        
+        // Connect to WebSocket
+        let webSocketPromise = WebSocketKit.WebSocket.connect(
+            to: wsURL,
+            headers: [
+                "Authorization": "Bearer \(apiKey)",
+                "OpenAI-Beta": "realtime=v1"
+            ],
+            configuration: .init(),
+            on: eventLoopGroup
+        ) { [weak self] ws in
+            guard let self = self else { return }
+            self.websocket = ws
+            
+            // Set up message handler
+            ws.onText { [weak self] _, text in
+                guard let self = self else { return }
+                self.handleWebSocketMessage(text)
             }
             
-            // Construct the WebSocket URL with model parameter
-            let wsURL = "wss://api.openai.com/v1/realtime?model=\(modelId)"
-            
-            // Connect to WebSocket
-            let webSocketPromise = WebSocketKit.WebSocket.connect(
-                to: wsURL,
-                headers: [
-                    "Authorization": "Bearer \(apiKey)",
-                    "OpenAI-Beta": "realtime=v1"
-                ],
-                configuration: .init(),
-                on: eventLoopGroup
-            ) { [weak self] ws in
+            // Set up binary handler for audio data
+            ws.onBinary { [weak self] _, buffer in
                 guard let self = self else { return }
-                self.websocket = ws
-                
-                // Set up message handler
-                ws.onText { [weak self] _, text in
-                    guard let self = self else { return }
-                    self.handleWebSocketMessage(text)
-                }
-                
-                // Set up binary handler for audio data
-                ws.onBinary { [weak self] _, buffer in
-                    guard let self = self else { return }
-                    self.handleBinaryData(buffer)
-                }
-                
-                // Set up close handler
-                ws.onClose.whenComplete { [weak self] result in
-                    guard let self = self else { return }
-                    switch result {
-                    case .success:
-                        DispatchQueue.main.async {
-                            self.state = .disconnected
-                        }
-                    case .failure(let error):
-                        DispatchQueue.main.async {
-                            self.state = .error("WebSocket closed with error: \(error.localizedDescription)")
-                        }
+                self.handleBinaryData(buffer)
+            }
+            
+            // Set up close handler
+            ws.onClose.whenComplete { [weak self] result in
+                guard let self = self else { return }
+                switch result {
+                case .success:
+                    DispatchQueue.main.async {
+                        self.state = .disconnected
+                    }
+                case .failure(let error):
+                    DispatchQueue.main.async {
+                        self.state = .error("WebSocket closed with error: \(error.localizedDescription)")
                     }
                 }
-                
-                // Update state to connected
-                DispatchQueue.main.async {
-                    self.state = .connected
-                }
-                
-                // Configure the session
-                self.configureSession()
             }
             
-            // Wait for connection to complete or fail
-            do {
-                _ = try await webSocketPromise.get()
-                return true
-            } catch {
-                DispatchQueue.main.async { [self] in
-                    self.state = .error("Failed to connect: \(error.localizedDescription)")
-                }
-                return false
+            // Update state to connected
+            DispatchQueue.main.async {
+                self.state = .connected
             }
+            
+            // Configure the session
+            self.configureSession()
+        }
+        
+        // Wait for connection to complete or fail
+        do {
+            _ = try await webSocketPromise.get()
+            return true
         } catch {
             DispatchQueue.main.async { [self] in
                 self.state = .error("Failed to connect: \(error.localizedDescription)")
