@@ -5,6 +5,25 @@ All notable changes to the SpeechToCode project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2025-03-08
+
+### Added
+- Completed Phase 2.1: Realtime API Integration
+- WebSocket connection to OpenAI Realtime API with proper authentication
+- Event handling for session events, text deltas, and audio deltas
+- Function calling capability for terminal command execution
+- Message handling and state management for the Realtime session
+- Audio input/output streaming support
+
+### Fixed
+- Addressed compiler warnings related to Sendable protocol conformance
+- Fixed WebSocket connection handling in RealtimeSession model
+- Corrected async/await usage in WebSocket connection process
+- Updated deprecated API calls in TerminalController
+- Improved error handling in WebSocket message processing
+- Enhanced RealtimeSession model with proper error recovery
+- Implemented safer memory management with weak self references
+
 ## [0.5.0] - 2025-03-07
 
 ### Fixed
