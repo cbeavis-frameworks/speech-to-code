@@ -7,12 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2025-03-09
+
 ### Added
-- Phase 3.3: Agent Communication
-  - Implemented bidirectional communication between Conversation Agent and Planning Agent
-  - Added structured message handling in ConversationAgent with dedicated handlers
-  - Enhanced RealtimeSession with proper delegate methods for agent communication
-  - Created test script (test-phase-3-3.swift) to verify agent communication features
+- Phase 4.1: Claude CLI Setup
+  - Implemented Claude CLI session management in ClaudeHelper class
+  - Added authentication handling for Claude Code CLI with API key support
+  - Enhanced ClaudeHelper with installation verification
+  - Added configuration settings for Claude CLI sessions
+  - Created test script (test-phase-4-1.swift) to verify Claude CLI setup features
+  - Enhanced terminal_helper.sh with Claude authentication and initialization functions
+
+### Fixed
+- Added missing authentication and initialization functions to handle_claude in terminal_helper.sh
+- Improved Claude CLI session status tracking with proper state management
+- Added proper error handling for Claude CLI operations
+- Fixed build errors in RealtimeSession.swift related to assistant message handling
 
 ## [0.8.0] - 2025-03-09
 

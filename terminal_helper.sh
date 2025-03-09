@@ -127,6 +127,70 @@ detect_claude_prompt() {
     fi
 }
 
+# Function to check if Claude CLI is authenticated
+check_claude_auth() {
+    # Run a command that checks Claude authentication status
+    local temp_output=$(mktemp)
+    
+    send_command "claude /doctor 2>&1 | grep -i 'auth' > $temp_output"
+    sleep 1 # Give time for the command to execute
+    
+    if grep -q -i "authenticated" "$temp_output"; then
+        echo "claude_authenticated"
+        rm "$temp_output"
+        return 0
+    else
+        echo "claude_not_authenticated"
+        rm "$temp_output"
+        return 1
+    fi
+}
+
+# Function to initialize Claude CLI in a specific directory
+initialize_claude_cli() {
+    local target_dir="$1"
+    
+    # If a target directory is provided, cd to it first
+    if [ -n "$target_dir" ]; then
+        send_command "cd \"$target_dir\""
+        sleep 0.5
+    fi
+    
+    # Run claude init
+    send_command "claude init"
+    sleep 1
+    
+    # Press y to confirm
+    send_keystroke "y"
+    sleep 0.5
+    
+    # Wait for initialization to complete
+    sleep 2
+    
+    # Check if initialization succeeded
+    if detect_claude_prompt | grep -q "claude_prompt_detected"; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Function to authenticate Claude CLI with an API key
+authenticate_claude_cli() {
+    local api_key="$1"
+    
+    # Run claude login with the API key
+    send_command "claude login --api-key=\"$api_key\""
+    sleep 2
+    
+    # Check if login succeeded
+    if check_claude_auth | grep -q "claude_authenticated"; then
+        return 0
+    else
+        return 1
+    fi
+}
+
 # Function to handle Claude CLI specific interactions
 handle_claude() {
     local action="$1"
@@ -134,8 +198,18 @@ handle_claude() {
     
     case "$action" in
         "init")
-            # Initialize Claude CLI in the current directory
-            send_command "claude"
+            # Initialize Claude CLI in the specified directory
+            local target_dir="$1"
+            initialize_claude_cli "$target_dir"
+            ;;
+        "login")
+            # Authenticate Claude with API key
+            local api_key="$1"
+            authenticate_claude_cli "$api_key"
+            ;;
+        "check_auth")
+            # Check if Claude is authenticated
+            check_claude_auth
             ;;
         "commit")
             # Use Claude to create a commit
