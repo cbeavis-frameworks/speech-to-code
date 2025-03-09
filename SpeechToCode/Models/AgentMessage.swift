@@ -8,21 +8,25 @@ struct AgentMessage: Codable, Identifiable {
     /// Type of message
     enum MessageType: String, Codable {
         /// Message from the user
-        case userInput
+        case userInput = "user_input"
         /// Message to the user
-        case userOutput
-        /// Message from the Conversation Agent to the Planning Agent
-        case conversationToPlanningAgent
-        /// Message from the Planning Agent to the Conversation Agent
-        case planningToConversationAgent
+        case assistantOutput = "assistant_output"
         /// Message for terminal command execution
-        case terminalCommand
+        case terminalCommand = "terminal_command"
         /// Response from a terminal command
-        case terminalResponse
-        /// Function call message
-        case functionCall
-        /// Function result message
-        case functionResult
+        case terminalOutput = "terminal_output"
+        /// Voice input from the user
+        case voiceInput = "voice_input"
+        /// Voice output to the user
+        case voiceOutput = "voice_output"
+        /// System message
+        case systemMessage = "system_message"
+        /// Planning request message
+        case planningRequest = "planning_request"
+        /// Planning response message
+        case planningResponse = "planning_response"
+        /// Error message
+        case error = "error"
     }
     
     /// The type of this message
@@ -59,51 +63,32 @@ struct AgentMessage: Codable, Identifiable {
         self.timestamp = Date()
     }
     
+    // MARK: - Factory Methods
+
     /// Create a user input message
-    /// - Parameter content: User input text
-    /// - Returns: An AgentMessage with the user input
-    static func userInput(_ content: String) -> AgentMessage {
-        return AgentMessage(
-            messageType: .userInput,
-            sender: "User",
-            recipient: "ConversationAgent",
-            content: content
-        )
+    /// - Parameters:
+    ///   - content: The user input content
+    ///   - recipient: The recipient agent
+    /// - Returns: An AgentMessage
+    static func userInput(content: String, recipient: String = "ConversationAgent") -> AgentMessage {
+        return AgentMessage(messageType: .userInput, sender: "User", recipient: recipient, content: content)
     }
     
-    /// Create a user output message
-    /// - Parameter content: Text to display to the user
-    /// - Returns: An AgentMessage with text for the user
-    static func userOutput(_ content: String) -> AgentMessage {
-        return AgentMessage(
-            messageType: .userOutput,
-            sender: "ConversationAgent",
-            recipient: "User",
-            content: content
-        )
+    /// Create a voice input message
+    /// - Parameters:
+    ///   - transcription: The transcribed voice content
+    ///   - recipient: The recipient agent
+    /// - Returns: An AgentMessage
+    static func voiceInput(transcription: String, recipient: String = "ConversationAgent") -> AgentMessage {
+        return AgentMessage(messageType: .voiceInput, sender: "User", recipient: recipient, content: transcription)
     }
     
-    /// Create a terminal command message
-    /// - Parameter command: The command to execute
-    /// - Returns: An AgentMessage with the terminal command
-    static func terminalCommand(_ command: String) -> AgentMessage {
-        return AgentMessage(
-            messageType: .terminalCommand,
-            sender: "ConversationAgent",
-            recipient: "TerminalController",
-            content: command
-        )
-    }
-    
-    /// Create a terminal response message
-    /// - Parameter response: The response from the terminal
-    /// - Returns: An AgentMessage with the terminal response
-    static func terminalResponse(_ response: String) -> AgentMessage {
-        return AgentMessage(
-            messageType: .terminalResponse,
-            sender: "TerminalController",
-            recipient: "ConversationAgent",
-            content: response
-        )
+    /// Create a voice output message
+    /// - Parameters:
+    ///   - content: The content to be spoken
+    ///   - sender: The sender agent
+    /// - Returns: An AgentMessage
+    static func voiceOutput(content: String, sender: String = "ConversationAgent") -> AgentMessage {
+        return AgentMessage(messageType: .voiceOutput, sender: sender, recipient: "User", content: content)
     }
 }
