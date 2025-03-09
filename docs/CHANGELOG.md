@@ -5,6 +5,15 @@ All notable changes to the SpeechToCode project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Phase 3.3: Agent Communication
+  - Implemented bidirectional communication between Conversation Agent and Planning Agent
+  - Added structured message handling in ConversationAgent with dedicated handlers
+  - Enhanced RealtimeSession with proper delegate methods for agent communication
+  - Created test script (test-phase-3-3.swift) to verify agent communication features
+
 ## [0.8.0] - 2025-03-09
 
 ### Added
