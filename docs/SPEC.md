@@ -49,20 +49,48 @@ SpeechToCode implements a multi-agent architecture to provide a seamless voice-c
 #### 4.1 OpenAI Realtime API
 - Provides real-time AI processing for voice commands
 - Enables function calling for terminal commands
-- Supports out-of-band responses for agent-to-agent communication
+- Processes text-based transcriptions from the macOS Speech Recognition framework
+- Handles message streaming and state management
 
 #### 4.2 Anthropic Claude Code CLI
 - Provides code-specific AI capabilities
 - Integrates with the Terminal Controller for code analysis and generation
 
-### 5. Helper Scripts
+#### 4.3 macOS Speech Recognition
+- Provides local speech-to-text conversion
+- Offers real-time transcription updates
+- Enables voice activity detection
+- Ensures privacy by processing audio on-device
+- Integrates with the application's voice processing pipeline
+
+### 5. Voice Processing
+The Voice Processing component uses macOS's native Speech Recognition capabilities to:
+- Convert spoken commands to text
+- Detect when the user is speaking
+- Process voice input in real-time
+- Provide text-to-speech for AI responses
+
+#### 5.1 VoiceProcessor
+- Manages audio recording sessions
+- Processes audio input via macOS Speech Recognition
+- Detects voice activity
+- Provides transcription updates
+- Handles text-to-speech conversion
+
+#### 5.2 Integration with Agents
+- ConversationAgent receives transcribed text from VoiceProcessor
+- Processes voice commands using the same pipeline as text input
+- Sends responses to VoiceProcessor for text-to-speech when needed
+- RealtimeSession processes transcribed text instead of raw audio
+
+### 6. Helper Scripts
 - **terminal_helper.sh**: Bash script that handles low-level Terminal interactions using AppleScript
   - Sends commands to Terminal.app
   - Sends keystrokes for interactive prompts
   - Reads Terminal content
   - Checks Terminal status
 
-### 6. Permissions and Security
+### 7. Permissions and Security
 - Requires Accessibility permissions to control Terminal.app
 - Uses AppleScript for Terminal interaction
 - Includes proper entitlements for automation

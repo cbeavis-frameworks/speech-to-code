@@ -5,6 +5,24 @@ All notable changes to the SpeechToCode project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2025-03-09
+
+### Added
+- Completed Phase 2.2: Voice Processing Implementation
+- Implemented VoiceProcessor using macOS Speech Recognition framework
+- Added voice activity detection for determining when user is speaking
+- Integrated text-to-speech capabilities for AI responses
+- Updated RealtimeSession to process transcribed text instead of raw audio
+- Modified ConversationAgent to handle voice command processing
+- Implemented AgentMessage model updates for voice-related message types
+
+### Fixed
+- Resolved warning in RealtimeSession.swift related to nil coalescing operator on non-optional value
+- Fixed unreachable catch block in ConversationAgent.swift
+- Removed redundant type casting in VoiceProcessor.swift
+- Eliminated unused variable declaration in VoiceProcessor.swift
+- Updated code to follow Swift best practices and resolved compiler warnings
+
 ## [0.6.0] - 2025-03-08
 
 ### Added

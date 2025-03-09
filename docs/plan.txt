@@ -9,49 +9,55 @@ This implementation plan outlines the steps needed to enhance the SpeechToCode a
 
 ## Phase 1: Foundation Setup
 
-### 1.1. Project Configuration ✅ (Completed on March 6, 2025)
+### 1.1. Project Configuration 
 - [x] Add OpenAI API client dependencies
 - [x] Configure API keys and authentication for OpenAI
 - [x] Set up environment variables for API access
 - [x] Update project entitlements for necessary permissions
 
-### 1.2. Terminal Controller Enhancements ✅
+### 1.2. Terminal Controller Enhancements 
 - [x] Extend TerminalController to support Claude Code CLI-specific commands
 - [x] Add detection for Claude Code interactive prompts
 - [x] Implement Claude Code command history tracking
 - [x] Create specialized response parsing for Claude Code output
 
-### 1.3. AI Agent Models ✅ (Completed on March 7, 2025)
+### 1.3. AI Agent Models 
 - [x] Create RealtimeSession model for managing OpenAI Realtime API sessions
 - [x] Implement ConversationAgent model with state management
 - [x] Implement PlanningAgent model with persistent storage
 - [x] Create AgentMessage model for structured communication
 
-## Phase 2: Conversation Agent Implementation
+## Phase 2: Voice Processing Integration
 
-### 2.1. Realtime API Integration ✅ (Completed on March 8, 2025)
-- [x] Implement WebSocket connection to OpenAI Realtime API
-- [x] Set up audio input/output streaming
-- [x] Configure text input/output handling
-- [x] Implement function calling schema for terminal commands
+The goal of this phase is to add voice processing capabilities to the SpeechToCode application.
 
-### 2.2. Voice Processing
-- [ ] Enhance existing speech recognition with Realtime API capabilities
-- [ ] Implement voice activation detection
-- [ ] Add support for interruptions and real-time responses
-- [ ] Create voice output system using Realtime API's audio generation
+### 2.1 Voice Processing Design (COMPLETE)
 
-### 2.3. Terminal Command Function Calling
-- [ ] Define function schema for terminal commands
-- [ ] Implement function call handler in ConversationAgent
-- [ ] Create mapping between function calls and TerminalController actions
-- [ ] Add response parsing for terminal output
+- Design a `VoiceProcessor` class to handle audio input and output
+- Determine the architecture for integrating voice with the existing agent system
+- Ensure compatibility with the multi-agent architecture from Phase 1
 
-### 2.4. User Interface
-- [ ] Create ConversationView for displaying agent interactions
-- [ ] Implement real-time transcription display
-- [ ] Add visual indicators for agent thinking/processing
-- [ ] Integrate with existing TerminalView
+### 2.2 Voice Processing Implementation (COMPLETE)
+
+- [x] Implement the `VoiceProcessor` class with the following capabilities:
+  - [x] Use macOS Speech Recognition framework to convert speech to text locally
+  - [x] Provide voice activity detection (VAD) to determine when the user is speaking
+  - [x] Manage speech recognition sessions and transcription processing
+  - [x] Support text-to-speech for AI responses
+  
+- [x] Modify the `RealtimeSession` to work with transcribed text rather than raw audio:
+  - [x] Remove audio streaming functionality
+  - [x] Add methods for processing transcriptions from the VoiceProcessor
+  - [x] Ensure proper handler delegation for transcription updates
+  
+- [x] Update the `ConversationAgent` to manage voice command processing:
+  - [x] Add methods for starting and stopping voice listening
+  - [x] Implement delegate methods for handling transcription updates
+  - [x] Process recognized speech for command execution
+
+- [x] Update the `AgentMessage` model to support voice-related message types:
+  - [x] Add voice input message type for transcribed user speech
+  - [x] Add voice output message type for AI responses to be spoken
 
 ## Phase 3: Planning Agent Implementation
 
@@ -69,7 +75,7 @@ This implementation plan outlines the steps needed to enhance the SpeechToCode a
 
 ### 3.3. Agent Communication
 - [ ] Set up communication channel between Conversation and Planning agents
-- [ ] Implement out-of-band responses using Realtime API
+- [ ] Implement structured responses via Realtime API
 - [ ] Create structured message format for agent-to-agent communication
 - [ ] Add message routing and handling
 
@@ -97,7 +103,7 @@ This implementation plan outlines the steps needed to enhance the SpeechToCode a
 
 ### 5.1. Multi-Agent Orchestration
 - [ ] Implement startup sequence for both agents
-- [ ] Create session management for both Realtime API connections
+- [ ] Create session management for Realtime API connections
 - [ ] Add coordinated shutdown and cleanup
 - [ ] Implement error handling and recovery
 
@@ -131,11 +137,11 @@ This implementation plan outlines the steps needed to enhance the SpeechToCode a
 - [ ] Test multi-agent communication
 - [ ] Verify terminal command execution
 - [ ] Test Claude Code interaction
-- [ ] Validate voice input/output
+- [ ] Validate speech recognition and transcription
 
 ### 6.3. Performance Optimization
-- [ ] Optimize token usage for both APIs
-- [ ] Improve response time for voice interactions
+- [ ] Optimize token usage for APIs
+- [ ] Improve response time for speech recognition
 - [ ] Enhance terminal command execution speed
 - [ ] Optimize context management for efficiency
 
@@ -145,45 +151,55 @@ This implementation plan outlines the steps needed to enhance the SpeechToCode a
 - [ ] Create user-friendly error messages
 - [ ] Implement fallback mechanisms
 
-## Technical Implementation Details
+## Implementation Specifications
 
-### Realtime API Session Management
+### Voice Processing
 
-```swift
-class RealtimeSessionManager {
-    // Manages WebSocket connections to OpenAI Realtime API
-    // Handles session creation, updates, and termination
-    // Processes incoming events and routes them appropriately
-}
-```
+The voice processing implementation will use the following approach:
 
-### Function Calling Schema
+1. Use macOS's built-in Speech Recognition framework for speech-to-text conversion
+   - This utilizes Apple's high-quality speech recognition technology
+   - Processing happens locally on the device
+   - Supports multiple languages and dialects
 
-```json
-{
-  "name": "run_command",
-  "description": "Send a command to the Terminal, which may be running the Claude CLI.",
-  "parameters": {
-    "type": "object",
-    "properties": {
-      "command": {
-        "type": "string",
-        "description": "The command text to submit in the Terminal."
-      },
-      "auto_confirm": {
-        "type": "boolean",
-        "description": "Whether to automatically confirm common prompts (y/n)."
-      }
-    },
-    "required": ["command"]
-  }
-}
-```
+2. Voice Activity Detection (VAD)
+   - Monitor audio levels to detect when the user starts and stops speaking
+   - Automatically stop recording after a period of silence
+   - Provide visual feedback about voice detection status
+
+3. Speech Recognition Process Flow
+   - When user starts speaking, begin a speech recognition session
+   - As user speaks, update UI with interim transcription
+   - When silence is detected, finalize the transcription
+   - Send the transcribed text to the Realtime API for processing
+
+4. Text-to-Speech for AI Responses
+   - Use AVSpeechSynthesizer for converting AI responses to speech
+   - Control speech rate, pitch, and volume for natural-sounding responses
+
+### Realtime API Integration
+
+The Realtime API integration will now use the following design:
+
+1. Connection Management
+   - Establish and maintain WebSocket connection to the OpenAI Realtime API
+   - Handle reconnection in case of connection loss
+   - Manage authentication with the API key
+
+2. Message Processing
+   - Process text-based messages from transcribed speech
+   - Handle delta responses from the API (text chunks, function calls)
+   - Support streaming responses for real-time interaction
+
+3. State Management
+   - Track session state (connecting, connected, disconnected)
+   - Manage voice processing state (listening, processing)
+   - Coordinate with the ConversationAgent for overall application flow
 
 ### Agent Communication Flow
 
-1. User speaks a command → Speech recognition converts to text
-2. Text sent to Conversation Agent via Realtime API
+1. User speaks a command → macOS Speech Recognition converts to text
+2. Transcribed text sent to Conversation Agent via Realtime API
 3. Conversation Agent processes request and may:
    - Query Planning Agent for context
    - Issue terminal commands via function calling
@@ -191,7 +207,7 @@ class RealtimeSessionManager {
 4. Terminal Controller executes commands in Terminal (with Claude Code)
 5. Terminal output is captured and returned to Conversation Agent
 6. Conversation Agent decides next steps based on terminal output and plan
-7. Agent provides voice and visual feedback to the user
+7. Agent provides text response, which may be synthesized to speech for user feedback
 
 ### Data Persistence
 

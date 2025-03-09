@@ -4,6 +4,14 @@ import WebSocketKit
 import NIOHTTP1
 import AsyncHTTPClient
 import NIOFoundationCompat
+import AVFoundation
+
+/// Protocol for RealtimeSession delegates
+protocol RealtimeSessionDelegate: AnyObject {
+    func realtimeSession(_ session: RealtimeSession, didReceiveTranscription text: String)
+    func realtimeSession(_ session: RealtimeSession, didChangeState state: RealtimeSession.SessionState)
+    func realtimeSession(_ session: RealtimeSession, didReceiveMessage message: AgentMessage)
+}
 
 /// Model for managing OpenAI Realtime API sessions
 @available(macOS 10.15, *)
@@ -34,6 +42,9 @@ class RealtimeSession: ObservableObject, @unchecked Sendable {
     /// Published properties for SwiftUI integration
     @Published var state: SessionState = .disconnected
     @Published var messages: [AgentMessage] = []
+    @Published var isListening: Bool = false
+    @Published var isProcessingVoice: Bool = false
+    @Published var currentTranscription: String = ""
     
     /// Session configuration
     private var apiKey: String
@@ -45,9 +56,14 @@ class RealtimeSession: ObservableObject, @unchecked Sendable {
     // Use the external configuration
     private var config: RealtimeSessionConfig
     
+    // Voice processing
+    private var voiceProcessor: VoiceProcessor?
+    private var isVoiceActivated: Bool = false
+    
     // Completion handlers for async events
     private var messageHandlers: [(AgentMessage) -> Void] = []
     private var functionCallHandlers: [(String, [String: Any]) -> Void] = []
+    private var transcriptionHandlers: [(String) -> Void] = []
     
     /// Initialize a new Realtime session
     /// - Parameters:
@@ -58,6 +74,31 @@ class RealtimeSession: ObservableObject, @unchecked Sendable {
         self.apiKey = apiKey ?? Config.OpenAI.apiKey
         self.modelId = modelId
         self.config = config
+        
+        _ = setupVoiceProcessor()
+    }
+    
+    /// Configure and start the voice processor
+    /// - Returns: Boolean indicating success
+    private func setupVoiceProcessor() -> Bool {
+        voiceProcessor = VoiceProcessor()
+        
+        guard let voiceProcessor = voiceProcessor else {
+            return false
+        }
+        
+        // Set up handlers for voice processor events
+        voiceProcessor.onTranscription { [weak self] transcription in
+            guard let self = self else { return }
+            self.currentTranscription = transcription
+            
+            // Notify all registered handlers
+            for handler in self.transcriptionHandlers {
+                handler(transcription)
+            }
+        }
+        
+        return true
     }
     
     /// Connect to the OpenAI Realtime API
@@ -104,12 +145,6 @@ class RealtimeSession: ObservableObject, @unchecked Sendable {
             ws.onText { [weak self] _, text in
                 guard let self = self else { return }
                 self.handleWebSocketMessage(text)
-            }
-            
-            // Set up binary handler for audio data
-            ws.onBinary { [weak self] _, buffer in
-                guard let self = self else { return }
-                self.handleBinaryData(buffer)
             }
             
             // Set up close handler
@@ -159,11 +194,15 @@ class RealtimeSession: ObservableObject, @unchecked Sendable {
                 "instructions": config.instructions,
                 "modalities": config.modalities,
                 "voice": config.voice,
-                "temperature": config.temperature
+                "temperature": config.temperature,
+                "input_audio_format": "pcm16",
+                "output_audio_format": "pcm16",
+                "turn_detection": [
+                    "mode": "client_vad"
+                ]
             ]
         ]
         
-        // Convert to JSON and send
         do {
             let jsonData = try JSONSerialization.data(withJSONObject: sessionUpdateEvent)
             if let jsonString = String(data: jsonData, encoding: .utf8) {
@@ -172,6 +211,16 @@ class RealtimeSession: ObservableObject, @unchecked Sendable {
         } catch {
             print("Error creating session update: \(error)")
         }
+    }
+    
+    /// Send a message to the server (non-async version for callbacks)
+    /// - Parameter message: The message to send
+    private func sendMessage(_ message: String) {
+        guard let websocket = websocket, state == .connected else {
+            return
+        }
+        
+        websocket.send(message)
     }
     
     /// Handle incoming WebSocket messages
@@ -190,15 +239,16 @@ class RealtimeSession: ObservableObject, @unchecked Sendable {
                 case "response.text.delta":
                     handleTextDelta(json)
                     
-                case "response.audio.delta":
-                    handleAudioDelta(json)
-                    
                 case "response.function_call.delta":
                     handleFunctionCallDelta(json)
                     
                 case "response.done":
                     handleResponseDone(json)
                     
+                case "conversation.item.input_audio_transcription.completed":
+                    // This event is no longer needed with the new Speech Recognition approach
+                    break
+                
                 default:
                     print("Unhandled event type: \(eventType)")
                 }
@@ -223,7 +273,7 @@ class RealtimeSession: ObservableObject, @unchecked Sendable {
             // Update UI with session info
             DispatchQueue.main.async {
                 let message = AgentMessage(
-                    messageType: .userOutput,
+                    messageType: .assistantOutput,
                     sender: "RealtimeSession",
                     recipient: "User",
                     content: "Session \(eventType == "session.created" ? "created" : "updated"): \(sessionId)",
@@ -238,65 +288,49 @@ class RealtimeSession: ObservableObject, @unchecked Sendable {
     /// - Parameter json: The event JSON
     private func handleTextDelta(_ json: [String: Any]) {
         if let responseId = json["response_id"] as? String,
-           let delta = json["delta"] as? [String: Any],
-           let text = delta["text"] as? String {
+           let delta = json["delta"] as? String {
             
-            // Update UI with text delta
-            DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
-                // If last message is from the same response, append the text
-                if let lastIndex = self.messages.lastIndex(where: { $0.metadata["responseId"] == responseId }) {
-                    let updatedContent = self.messages[lastIndex].content + text
+            // Append to the current text buffer
+            if let index = messages.lastIndex(where: { $0.metadata["responseId"] == responseId }) {
+                // Update existing message
+                DispatchQueue.main.async {
+                    let lastMessage = self.messages[index]
+                    let updatedContent = lastMessage.content + delta
+                    
                     let updatedMessage = AgentMessage(
-                        messageType: .userOutput,
-                        sender: "RealtimeSession",
-                        recipient: "User",
+                        messageType: lastMessage.messageType,
+                        sender: lastMessage.sender,
+                        recipient: lastMessage.recipient,
                         content: updatedContent,
-                        metadata: ["responseId": responseId]
+                        metadata: lastMessage.metadata
                     )
-                    self.messages[lastIndex] = updatedMessage
-                } else {
-                    // Create new message
-                    let message = AgentMessage(
-                        messageType: .userOutput,
-                        sender: "RealtimeSession",
-                        recipient: "User",
-                        content: text,
-                        metadata: ["responseId": responseId]
-                    )
+                    self.messages[index] = updatedMessage
+                    
+                    // Notify message handlers of update
+                    for handler in self.messageHandlers {
+                        handler(updatedMessage)
+                    }
+                }
+            } else {
+                // Create new message
+                let message = AgentMessage(
+                    messageType: .assistantOutput,
+                    sender: self.modelId,
+                    recipient: "User",
+                    content: delta,
+                    metadata: ["responseId": responseId]
+                )
+                
+                DispatchQueue.main.async {
                     self.messages.append(message)
+                    
+                    // Notify handlers
+                    for handler in self.messageHandlers {
+                        handler(message)
+                    }
                 }
             }
-            
-            // Notify handlers of new text
-            for handler in messageHandlers {
-                let message = AgentMessage(
-                    messageType: .userOutput,
-                    sender: "RealtimeSession",
-                    recipient: "User",
-                    content: text,
-                    metadata: ["responseId": responseId, "isComplete": "false"]
-                )
-                handler(message)
-            }
         }
-    }
-    
-    /// Handle audio delta events
-    /// - Parameter json: The event JSON
-    private func handleAudioDelta(_ json: [String: Any]) {
-        // Audio handling will be implemented in a future update
-        // For now, we're focusing on text-based interaction
-        if let responseId = json["response_id"] as? String {
-            print("Audio delta received for response: \(responseId)")
-        }
-    }
-    
-    /// Handle binary data (usually audio)
-    /// - Parameter buffer: The binary data buffer
-    private func handleBinaryData(_ buffer: ByteBuffer) {
-        // Audio handling will be implemented in a future update
-        print("Binary data received: \(buffer.readableBytes) bytes")
     }
     
     /// Handle function call delta events
@@ -326,8 +360,8 @@ class RealtimeSession: ObservableObject, @unchecked Sendable {
                     functionCallContent = "Function call: \(name)"
                 }
                 
-                let message = AgentMessage(
-                    messageType: .functionCall,
+                let functionCallMessage = AgentMessage(
+                    messageType: .planningRequest,
                     sender: "RealtimeSession",
                     recipient: "ConversationAgent",
                     content: functionCallContent,
@@ -336,7 +370,7 @@ class RealtimeSession: ObservableObject, @unchecked Sendable {
                         "function": name
                     ]
                 )
-                self.messages.append(message)
+                self.messages.append(functionCallMessage)
             }
         }
     }
@@ -371,10 +405,63 @@ class RealtimeSession: ObservableObject, @unchecked Sendable {
         }
     }
     
+    /// Start listening for voice input
+    /// - Returns: Boolean indicating success
+    func startListening() -> Bool {
+        guard state == .connected else {
+            return false
+        }
+        
+        // Make sure we have a voice processor
+        if voiceProcessor == nil {
+            _ = setupVoiceProcessor()
+        }
+        
+        guard let voiceProcessor = voiceProcessor else {
+            return false
+        }
+        
+        // Start the speech recognition
+        let success = voiceProcessor.startRecording()
+        if success {
+            isVoiceActivated = true
+            
+            DispatchQueue.main.async {
+                self.isListening = true
+                self.currentTranscription = ""
+            }
+        }
+        
+        return success
+    }
+    
+    /// Stop listening for voice input and process the final transcription
+    func stopListening() {
+        guard let voiceProcessor = voiceProcessor, isVoiceActivated else {
+            return
+        }
+        
+        // Get the final transcription
+        let finalTranscription = voiceProcessor.processRecordedSpeech()
+        
+        // If we have a transcription, send it as a user message
+        if !finalTranscription.isEmpty {
+            Task {
+                _ = await sendUserMessage(content: finalTranscription)
+            }
+        }
+        
+        isVoiceActivated = false
+        
+        DispatchQueue.main.async {
+            self.isListening = false
+        }
+    }
+    
     /// Send a user message to the Realtime API
     /// - Parameter text: The user message text
     /// - Returns: A boolean indicating success
-    func sendUserMessage(_ text: String) async -> Bool {
+    func sendUserMessage(content text: String) async -> Bool {
         guard let websocket = websocket, state == .connected else {
             return false
         }
@@ -406,7 +493,7 @@ class RealtimeSession: ObservableObject, @unchecked Sendable {
             // Add user message to the UI
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
-                let userMessage = AgentMessage.userInput(text)
+                let userMessage = AgentMessage.userInput(content: text)
                 self.messages.append(userMessage)
             }
             
@@ -427,6 +514,12 @@ class RealtimeSession: ObservableObject, @unchecked Sendable {
             print("Error sending message: \(error)")
             return false
         }
+    }
+    
+    /// Register a handler for transcription updates
+    /// - Parameter handler: The callback closure
+    func onTranscription(_ handler: @escaping (String) -> Void) {
+        transcriptionHandlers.append(handler)
     }
     
     /// Register a handler for new messages
@@ -496,7 +589,7 @@ class RealtimeSession: ObservableObject, @unchecked Sendable {
             // Add user message to the UI
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
-                let userMessage = AgentMessage.userInput(text)
+                let userMessage = AgentMessage.userInput(content: text)
                 self.messages.append(userMessage)
             }
             
