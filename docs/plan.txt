@@ -74,10 +74,10 @@ The goal of this phase is to add voice processing capabilities to the SpeechToCo
 - [x] Implement plan versioning and history
 
 ### 3.3. Agent Communication
-- [ ] Set up communication channel between Conversation and Planning agents
-- [ ] Implement structured responses via Realtime API
-- [ ] Create structured message format for agent-to-agent communication
-- [ ] Add message routing and handling
+- [x] Set up communication channel between Conversation and Planning agents
+- [x] Implement structured responses via Realtime API
+- [x] Create structured message format for agent-to-agent communication
+- [x] Add message routing and handling
 
 ## Phase 4: Claude Code Integration
 
