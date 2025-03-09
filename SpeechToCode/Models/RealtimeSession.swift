@@ -8,8 +8,22 @@ import AVFoundation
 
 /// Protocol for RealtimeSession delegates
 protocol RealtimeSessionDelegate: AnyObject {
+    /// Called when transcription is received
+    /// - Parameters:
+    ///   - session: The session that received the transcription
+    ///   - text: The transcribed text
     func realtimeSession(_ session: RealtimeSession, didReceiveTranscription text: String)
+    
+    /// Called when session state changes
+    /// - Parameters:
+    ///   - session: The session that changed state
+    ///   - state: The new state
     func realtimeSession(_ session: RealtimeSession, didChangeState state: RealtimeSession.SessionState)
+    
+    /// Called when a message is received
+    /// - Parameters:
+    ///   - session: The session that received the message
+    ///   - message: The received message
     func realtimeSession(_ session: RealtimeSession, didReceiveMessage message: AgentMessage)
 }
 
@@ -40,7 +54,7 @@ class RealtimeSession: ObservableObject, @unchecked Sendable {
     }
     
     /// Published properties for SwiftUI integration
-    @Published var state: SessionState = .disconnected
+    @Published var sessionState: SessionState = .disconnected
     @Published var messages: [AgentMessage] = []
     @Published var isListening: Bool = false
     @Published var isProcessingVoice: Bool = false
@@ -64,6 +78,8 @@ class RealtimeSession: ObservableObject, @unchecked Sendable {
     private var messageHandlers: [(AgentMessage) -> Void] = []
     private var functionCallHandlers: [(String, [String: Any]) -> Void] = []
     private var transcriptionHandlers: [(String) -> Void] = []
+    
+    weak var delegate: RealtimeSessionDelegate?
     
     /// Initialize a new Realtime session
     /// - Parameters:
@@ -104,8 +120,8 @@ class RealtimeSession: ObservableObject, @unchecked Sendable {
     /// Connect to the OpenAI Realtime API
     /// - Returns: A boolean indicating success
     func connect() async -> Bool {
-        guard state == .disconnected else {
-            if state == .connected {
+        guard sessionState == .disconnected else {
+            if sessionState == .connected {
                 return true // Already connected
             }
             return false
@@ -113,14 +129,14 @@ class RealtimeSession: ObservableObject, @unchecked Sendable {
         
         // Update state to connecting
         DispatchQueue.main.async { [self] in
-            self.state = .connecting
+            self.sessionState = .connecting
         }
         
         // Create event loop group for the WebSocket
         eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1)
         guard let eventLoopGroup = eventLoopGroup else {
             DispatchQueue.main.async {
-                self.state = .error("Failed to create event loop group")
+                self.sessionState = .error("Failed to create event loop group")
             }
             return false
         }
@@ -153,18 +169,18 @@ class RealtimeSession: ObservableObject, @unchecked Sendable {
                 switch result {
                 case .success:
                     DispatchQueue.main.async {
-                        self.state = .disconnected
+                        self.sessionState = .disconnected
                     }
                 case .failure(let error):
                     DispatchQueue.main.async {
-                        self.state = .error("WebSocket closed with error: \(error.localizedDescription)")
+                        self.sessionState = .error("WebSocket closed with error: \(error.localizedDescription)")
                     }
                 }
             }
             
             // Update state to connected
             DispatchQueue.main.async {
-                self.state = .connected
+                self.sessionState = .connected
             }
             
             // Configure the session
@@ -177,7 +193,7 @@ class RealtimeSession: ObservableObject, @unchecked Sendable {
             return true
         } catch {
             DispatchQueue.main.async { [self] in
-                self.state = .error("Failed to connect: \(error.localizedDescription)")
+                self.sessionState = .error("Failed to connect: \(error.localizedDescription)")
             }
             return false
         }
@@ -216,7 +232,7 @@ class RealtimeSession: ObservableObject, @unchecked Sendable {
     /// Send a message to the server (non-async version for callbacks)
     /// - Parameter message: The message to send
     private func sendMessage(_ message: String) {
-        guard let websocket = websocket, state == .connected else {
+        guard let websocket = websocket, sessionState == .connected else {
             return
         }
         
@@ -408,7 +424,7 @@ class RealtimeSession: ObservableObject, @unchecked Sendable {
     /// Start listening for voice input
     /// - Returns: Boolean indicating success
     func startListening() -> Bool {
-        guard state == .connected else {
+        guard sessionState == .connected else {
             return false
         }
         
@@ -462,7 +478,7 @@ class RealtimeSession: ObservableObject, @unchecked Sendable {
     /// - Parameter text: The user message text
     /// - Returns: A boolean indicating success
     func sendUserMessage(content text: String) async -> Bool {
-        guard let websocket = websocket, state == .connected else {
+        guard let websocket = websocket, sessionState == .connected else {
             return false
         }
         
@@ -541,7 +557,7 @@ class RealtimeSession: ObservableObject, @unchecked Sendable {
     ///   - functionCall: Optional specific function to call
     /// - Returns: A boolean indicating success
     func requestFunctionCall(_ text: String, functions: [[String: Any]], functionCall: String? = nil) async -> Bool {
-        guard let websocket = websocket, state == .connected else {
+        guard let websocket = websocket, sessionState == .connected else {
             return false
         }
         
@@ -619,7 +635,7 @@ class RealtimeSession: ObservableObject, @unchecked Sendable {
     ///   - error: Optional error message
     /// - Returns: A boolean indicating success
     func sendFunctionResult(_ functionName: String, result: Any, error: String? = nil) async -> Bool {
-        guard let websocket = websocket, state == .connected else {
+        guard let websocket = websocket, sessionState == .connected else {
             return false
         }
         
@@ -683,12 +699,215 @@ class RealtimeSession: ObservableObject, @unchecked Sendable {
             }
             
             DispatchQueue.main.async {
-                self?.state = .disconnected
+                self?.sessionState = .disconnected
             }
         }
     }
     
     deinit {
         disconnect()
+    }
+    
+    /// Set the user context for better AI responses
+    /// - Parameter context: The context to set
+    /// - Returns: Success indicator
+    func setContext(_ context: String) async -> Bool {
+        guard sessionState == .connected else {
+            return false
+        }
+        
+        // Format context as a system message
+        let systemPrompt = """
+        User project context:
+        \(context)
+        
+        Use this context to provide more relevant and helpful responses.
+        """
+        
+        // Send a session.update event with the system prompt as instructions
+        let event: [String: Any] = [
+            "type": "session.update",
+            "session": [
+                "instructions": systemPrompt
+            ]
+        ]
+        
+        do {
+            try await sendEvent(event)
+            return true
+        } catch {
+            print("Failed to set context: \(error)")
+            return false
+        }
+    }
+    
+    /// Send an event to the server
+    /// - Parameter event: The event to send
+    /// - Throws: Error if sending the event fails
+    private func sendEvent(_ event: [String: Any]) async throws {
+        guard let websocket = websocket else {
+            throw NSError(domain: "RealtimeSession", code: 1, userInfo: [NSLocalizedDescriptionKey: "No WebSocket connection"])
+        }
+        
+        let eventData = try JSONSerialization.data(withJSONObject: event)
+        if let eventString = String(data: eventData, encoding: .utf8) {
+            try await websocket.send(eventString)
+        } else {
+            throw NSError(domain: "RealtimeSession", code: 2, userInfo: [NSLocalizedDescriptionKey: "Failed to serialize event"])
+        }
+    }
+}
+
+extension RealtimeSession: WebSocketConnectionDelegate {
+    func webSocketDidConnect(_ connection: WebSocketConnection) {
+        print("Connected to WebSocket server")
+        sessionState = .connected
+        delegate?.realtimeSession(self, didChangeState: .connected)
+    }
+    
+    func webSocketDidDisconnect(_ connection: WebSocketConnection, error: Error?) {
+        print("Disconnected from WebSocket server: \(error?.localizedDescription ?? "No error")")
+        sessionState = .disconnected
+        delegate?.realtimeSession(self, didChangeState: .disconnected)
+    }
+    
+    func webSocket(_ connection: WebSocketConnection, didReceiveMessage message: String) {
+        // Process WebSocket messages from the server
+        print("WebSocket message received: \(message)")
+        
+        // Parse event from the server
+        if let data = message.data(using: .utf8) {
+            do {
+                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                    processServerEvent(json)
+                }
+            } catch {
+                print("Error parsing WebSocket message: \(error)")
+            }
+        }
+    }
+    
+    /// Process a server event from the WebSocket
+    private func processServerEvent(_ json: [String: Any]) {
+        guard let eventType = json["type"] as? String else {
+            print("Missing event type in server message")
+            return
+        }
+        
+        switch eventType {
+        case "response.text.delta":
+            if let responseId = json["response_id"] as? String,
+               let delta = json["delta"] as? [String: Any],
+               let text = delta["text"] as? String {
+                
+                handleTextDelta(responseId: responseId, text: text)
+                
+                // Notify delegate
+                delegate?.realtimeSession(self, didReceiveTranscription: text)
+            }
+            
+        case "response.function_call.delta":
+            if let responseId = json["response_id"] as? String,
+               let delta = json["delta"] as? [String: Any],
+               let functionCall = delta["function_call"] as? [String: Any],
+               let name = functionCall["name"] as? String {
+                
+                let arguments = functionCall["arguments"] as? [String: Any] ?? [:]
+                handleFunctionCallDelta(name: name, arguments: arguments, responseId: responseId)
+            }
+            
+        case "response.done":
+            if let responseId = json["response_id"] as? String {
+                handleResponseDone(responseId: responseId)
+            }
+            
+        default:
+            print("Unhandled event type: \(eventType)")
+        }
+    }
+    
+    /// Handle text delta from the server
+    private func handleTextDelta(responseId: String, text: String) {
+        // Check if we have an existing message for this response
+        if let index = messages.firstIndex(where: { $0.metadata["responseId"] == responseId }) {
+            // Update existing message
+            var updatedMessage = messages[index]
+            updatedMessage.content += text
+            
+            DispatchQueue.main.async {
+                self.messages[index] = updatedMessage
+                
+                // Notify delegate of message update
+                self.delegate?.realtimeSession(self, didReceiveMessage: updatedMessage)
+            }
+        } else {
+            // Create new message
+            let assistantMessage = AgentMessage(
+                messageType: .assistantOutput,
+                sender: modelId,
+                recipient: "User",
+                content: text,
+                metadata: ["responseId": responseId]
+            )
+            
+            DispatchQueue.main.async {
+                self.messages.append(assistantMessage)
+                
+                // Notify delegate of new message
+                self.delegate?.realtimeSession(self, didReceiveMessage: assistantMessage)
+            }
+        }
+    }
+    
+    /// Handle function call delta from the server
+    private func handleFunctionCallDelta(name: String, arguments: [String: Any], responseId: String) {
+        // Format function call for display
+        let functionCallContent: String
+        if let argsData = try? JSONSerialization.data(withJSONObject: arguments),
+           let argsString = String(data: argsData, encoding: .utf8) {
+            functionCallContent = "Function call: \(name)\nArguments: \(argsString)"
+        } else {
+            functionCallContent = "Function call: \(name)"
+        }
+        
+        // Create agent message for function call
+        let functionMessage = AgentMessage(
+            messageType: .planningRequest,
+            sender: "RealtimeAPI",
+            recipient: "ConversationAgent",
+            content: functionCallContent,
+            metadata: [
+                "responseId": responseId,
+                "functionName": name
+            ]
+        )
+        
+        DispatchQueue.main.async {
+            self.messages.append(functionMessage)
+            
+            // Notify delegate of function call
+            self.delegate?.realtimeSession(self, didReceiveMessage: functionMessage)
+        }
+        
+        // Process function call with registered handlers
+        for handler in functionCallHandlers {
+            handler(name, arguments)
+        }
+    }
+    
+    /// Handle response completion from the server
+    private func handleResponseDone(responseId: String) {
+        // Find the message associated with this response
+        if let index = messages.firstIndex(where: { $0.metadata["responseId"] == responseId }) {
+            var completedMessage = messages[index]
+            completedMessage.metadata["completed"] = "true"
+            
+            DispatchQueue.main.async {
+                self.messages[index] = completedMessage
+                
+                // Notify delegate of message completion
+                self.delegate?.realtimeSession(self, didReceiveMessage: completedMessage)
+            }
+        }
     }
 }

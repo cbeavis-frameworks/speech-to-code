@@ -23,7 +23,7 @@ class ConversationAgent: ObservableObject, VoiceProcessorDelegate, RealtimeSessi
     
     /// References to other components
     private var realtimeSession: Any?
-    private var planningAgent: Any?
+    private var planningAgent: PlanningAgent?
     private var terminalController: Any? // Using Any since we don't have the actual type yet
     
     /// Voice processing configuration
@@ -37,9 +37,13 @@ class ConversationAgent: ObservableObject, VoiceProcessorDelegate, RealtimeSessi
     /// Flag to track if listening for voice
     private var listeningForVoice: Bool = false
     
+    /// Agent communication message handler
+    private var messageHandlers: [AgentMessage.MessageType: (AgentMessage) async -> AgentMessage] = [:]
+    
     /// Initialize a new Conversation Agent
     init() {
         // Initialize with default state
+        setupMessageHandlers()
     }
     
     /// Connect to a Realtime Session
@@ -55,7 +59,7 @@ class ConversationAgent: ObservableObject, VoiceProcessorDelegate, RealtimeSessi
     
     /// Connect to a Planning Agent
     /// - Parameter agent: The Planning agent to connect to
-    func connectToPlanningAgent(_ agent: Any) {
+    func connectToPlanningAgent(_ agent: PlanningAgent) {
         self.planningAgent = agent
     }
     
@@ -102,6 +106,11 @@ class ConversationAgent: ObservableObject, VoiceProcessorDelegate, RealtimeSessi
     func realtimeSession(_ session: RealtimeSession, didReceiveMessage message: AgentMessage) {
         DispatchQueue.main.async {
             self.messages.append(message)
+            
+            // Process the message using our communication system
+            Task {
+                _ = await self.processIncomingAgentMessage(message)
+            }
         }
     }
     
@@ -201,6 +210,14 @@ class ConversationAgent: ObservableObject, VoiceProcessorDelegate, RealtimeSessi
             self.messages.append(userMessage)
         }
         
+        // Check if this input should be routed to PlanningAgent
+        if userInput.lowercased().contains("plan") || 
+           userInput.lowercased().contains("task") ||
+           userInput.lowercased().contains("context") {
+            
+            await requestProjectContextFromPlanningAgent()
+        }
+        
         // Forward to Realtime session (if available)
         if let realtimeSession = realtimeSession as? RealtimeSession {
             let success = await realtimeSession.sendUserMessage(content: userInput)
@@ -210,11 +227,6 @@ class ConversationAgent: ObservableObject, VoiceProcessorDelegate, RealtimeSessi
                 }
                 return false
             }
-        }
-        
-        // Also inform planning agent if available
-        if let planningAgent = planningAgent as? PlanningAgent {
-            planningAgent.processUserInput(userInput)
         }
         
         // Return to idle state
@@ -305,5 +317,287 @@ class ConversationAgent: ObservableObject, VoiceProcessorDelegate, RealtimeSessi
         voiceActivationEnabled = enabled
         autoCommitAfterSilence = autoCommit
         interruptibleResponses = interruptible
+    }
+    
+    // MARK: - Agent Communication Methods
+    
+    /// Set up message handlers for agent communication
+    private func setupMessageHandlers() {
+        // Define handlers for each message type
+        messageHandlers[.planQueryResult] = { [weak self] message in
+            // Handle plan query result
+            guard let self = self else { 
+                return AgentMessage(
+                    messageType: .error,
+                    sender: "ConversationAgent",
+                    recipient: message.sender,
+                    content: "Self reference lost"
+                )
+            }
+            
+            // Log the result and potentially send to Realtime API
+            if let realtimeSession = self.realtimeSession as? RealtimeSession {
+                // Format the plan info nicely for the user
+                let formattedContent = "📋 Plan Information:\n\(message.content)"
+                Task {
+                    await realtimeSession.sendAssistantMessage(content: formattedContent)
+                }
+            }
+            
+            // Return acknowledgment message
+            return AgentMessage(
+                messageType: .assistantOutput,
+                sender: "ConversationAgent",
+                recipient: message.sender,
+                content: "Received plan query result",
+                metadata: ["processed": "true"]
+            )
+        }
+        
+        messageHandlers[.planUpdateConfirmation] = { [weak self] message in
+            // Handle plan update confirmation
+            guard let self = self else { 
+                return AgentMessage(
+                    messageType: .error,
+                    sender: "ConversationAgent",
+                    recipient: message.sender,
+                    content: "Self reference lost"
+                )
+            }
+            
+            // Notify the user
+            if let realtimeSession = self.realtimeSession as? RealtimeSession {
+                Task {
+                    await realtimeSession.sendAssistantMessage(content: "✅ " + message.content)
+                }
+            }
+            
+            // Return acknowledgment message
+            return AgentMessage(
+                messageType: .assistantOutput,
+                sender: "ConversationAgent",
+                recipient: message.sender,
+                content: "Acknowledged plan update",
+                metadata: ["processed": "true"]
+            )
+        }
+        
+        messageHandlers[.planSummaryResult] = { [weak self] message in
+            // Handle plan summary result
+            guard let self = self else { 
+                return AgentMessage(
+                    messageType: .error,
+                    sender: "ConversationAgent",
+                    recipient: message.sender,
+                    content: "Self reference lost"
+                )
+            }
+            
+            // Format and send to user
+            if let realtimeSession = self.realtimeSession as? RealtimeSession {
+                let formattedContent = "📊 Plan Summary:\n\(message.content)"
+                Task {
+                    await realtimeSession.sendAssistantMessage(content: formattedContent)
+                }
+            }
+            
+            // Return acknowledgment message
+            return AgentMessage(
+                messageType: .assistantOutput,
+                sender: "ConversationAgent",
+                recipient: message.sender,
+                content: "Received plan summary",
+                metadata: ["processed": "true"]
+            )
+        }
+        
+        messageHandlers[.projectContextResult] = { [weak self] message in
+            // Handle project context result
+            guard let self = self else { 
+                return AgentMessage(
+                    messageType: .error,
+                    sender: "ConversationAgent",
+                    recipient: message.sender,
+                    content: "Self reference lost"
+                )
+            }
+            
+            // Use the project context in our communication with the user
+            if let realtimeSession = self.realtimeSession as? RealtimeSession {
+                Task {
+                    // Enhance with project context rather than just forwarding directly
+                    await realtimeSession.setContext(message.content)
+                }
+            }
+            
+            // Return acknowledgment message
+            return AgentMessage(
+                messageType: .assistantOutput,
+                sender: "ConversationAgent",
+                recipient: message.sender,
+                content: "Received project context",
+                metadata: ["processed": "true"]
+            )
+        }
+        
+        messageHandlers[.error] = { [weak self] message in
+            // Handle error message
+            guard let self = self else { 
+                return AgentMessage(
+                    messageType: .error,
+                    sender: "ConversationAgent",
+                    recipient: message.sender,
+                    content: "Self reference lost"
+                )
+            }
+            
+            DispatchQueue.main.async {
+                self.state = .error(message.content)
+            }
+            
+            // Log but don't necessarily forward to user
+            print("Error from \(message.sender): \(message.content)")
+            
+            // Return acknowledgment
+            return AgentMessage(
+                messageType: .error,
+                sender: "ConversationAgent",
+                recipient: message.sender,
+                content: "Error acknowledged: \(message.content)",
+                metadata: ["processed": "true"]
+            )
+        }
+    }
+    
+    /// Process an incoming agent message
+    /// - Parameter message: The message to process
+    /// - Returns: Response message, if any
+    func processIncomingAgentMessage(_ message: AgentMessage) async -> AgentMessage {
+        // Check if we have a handler for this message type
+        if let handler = messageHandlers[message.messageType] {
+            return await handler(message)
+        } else {
+            // Default handler for unhandled message types
+            print("Unhandled message type: \(message.messageType)")
+            return AgentMessage(
+                messageType: .error,
+                sender: "ConversationAgent",
+                recipient: message.sender,
+                content: "Unhandled message type: \(message.messageType)",
+                metadata: ["processed": "false"]
+            )
+        }
+    }
+    
+    /// Send a message to another agent
+    /// - Parameters:
+    ///   - message: The message to send
+    ///   - recipient: The recipient agent
+    /// - Returns: Response message, if any
+    @discardableResult
+    func sendAgentMessage(_ message: AgentMessage) async -> AgentMessage? {
+        // Add to our message log
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.messages.append(message)
+        }
+        
+        // Route to appropriate agent
+        switch message.recipient {
+        case "PlanningAgent":
+            // Route to planning agent
+            if let planningAgent = planningAgent {
+                let response = planningAgent.processAgentMessage(message)
+                
+                // Add response to message log
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self else { return }
+                    self.messages.append(response)
+                }
+                
+                // Process the response and discard the result
+                _ = await processIncomingAgentMessage(response)
+                
+                return response
+            }
+        default:
+            print("Unknown recipient: \(message.recipient)")
+        }
+        
+        return nil
+    }
+    
+    /// Request project context from the planning agent
+    /// - Returns: Project context
+    @discardableResult
+    func requestProjectContextFromPlanningAgent() async -> String? {
+        // Create a project context request
+        let contextRequest = AgentMessage.requestProjectContext(sender: "ConversationAgent")
+        
+        // Send to planning agent
+        let response = await sendAgentMessage(contextRequest)
+        
+        // Return the context if valid
+        if let response = response, response.messageType == .projectContextResult {
+            return response.content
+        }
+        
+        return nil
+    }
+    
+    /// Request a plan update
+    /// - Parameter updateDetails: Plan update details
+    /// - Returns: Success indicator
+    @discardableResult
+    func requestPlanUpdate(_ updateDetails: String) async -> Bool {
+        // Create plan update request
+        let updateRequest = AgentMessage.requestPlanUpdate(content: updateDetails, sender: "ConversationAgent")
+        
+        // Send to planning agent
+        let response = await sendAgentMessage(updateRequest)
+        
+        // Check response
+        if let response = response, response.messageType == .planUpdateConfirmation {
+            return true
+        }
+        
+        return false
+    }
+    
+    /// Request a plan query
+    /// - Parameter query: The query string
+    /// - Returns: Query result
+    @discardableResult
+    func queryPlan(_ query: String) async -> String? {
+        // Create a plan query request
+        let queryRequest = AgentMessage.requestPlanQuery(query: query, sender: "ConversationAgent")
+        
+        // Send to planning agent
+        let response = await sendAgentMessage(queryRequest)
+        
+        // Return the query result if valid
+        if let response = response, response.messageType == .planQueryResult {
+            return response.content
+        }
+        
+        return nil
+    }
+    
+    /// Request a plan summary
+    /// - Returns: Plan summary
+    @discardableResult
+    func requestPlanSummary() async -> String? {
+        // Create a plan summary request
+        let summaryRequest = AgentMessage.requestPlanSummary(sender: "ConversationAgent")
+        
+        // Send to planning agent
+        let response = await sendAgentMessage(summaryRequest)
+        
+        // Return the summary if valid
+        if let response = response, response.messageType == .planSummaryResult {
+            return response.content
+        }
+        
+        return nil
     }
 }
