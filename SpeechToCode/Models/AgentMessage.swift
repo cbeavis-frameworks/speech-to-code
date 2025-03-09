@@ -25,6 +25,22 @@ struct AgentMessage: Codable, Identifiable {
         case planningRequest = "planning_request"
         /// Planning response message
         case planningResponse = "planning_response"
+        /// Request to update the plan
+        case requestPlanUpdate = "request_plan_update"
+        /// Confirmation of plan update
+        case planUpdateConfirmation = "plan_update_confirmation"
+        /// Request to query the plan
+        case requestPlanQuery = "request_plan_query"
+        /// Result of a plan query
+        case planQueryResult = "plan_query_result"
+        /// Request for a plan summary
+        case requestPlanSummary = "request_plan_summary"
+        /// Result of a plan summary request
+        case planSummaryResult = "plan_summary_result"
+        /// Request for project context
+        case requestProjectContext = "request_project_context"
+        /// Result of a project context request
+        case projectContextResult = "project_context_result"
         /// Error message
         case error = "error"
     }
@@ -90,5 +106,68 @@ struct AgentMessage: Codable, Identifiable {
     /// - Returns: An AgentMessage
     static func voiceOutput(content: String, sender: String = "ConversationAgent") -> AgentMessage {
         return AgentMessage(messageType: .voiceOutput, sender: sender, recipient: "User", content: content)
+    }
+    
+    // MARK: - Plan Management Functions
+    
+    /// Create a request to update the plan
+    /// - Parameter content: The plan update details
+    /// - Returns: An AgentMessage
+    static func requestPlanUpdate(content: String, sender: String = "ConversationAgent") -> AgentMessage {
+        return AgentMessage(messageType: .requestPlanUpdate, sender: sender, recipient: "PlanningAgent", content: content)
+    }
+    
+    /// Create a plan update confirmation
+    /// - Parameter message: The confirmation message
+    /// - Returns: An AgentMessage
+    static func planUpdateConfirmation(message: String, sender: String = "PlanningAgent") -> AgentMessage {
+        return AgentMessage(messageType: .planUpdateConfirmation, sender: sender, recipient: "ConversationAgent", content: message)
+    }
+    
+    /// Create a request to query the plan
+    /// - Parameter query: The query string
+    /// - Returns: An AgentMessage
+    static func requestPlanQuery(query: String, sender: String = "ConversationAgent") -> AgentMessage {
+        return AgentMessage(messageType: .requestPlanQuery, sender: sender, recipient: "PlanningAgent", content: query)
+    }
+    
+    /// Create a plan query result
+    /// - Parameter result: The query result
+    /// - Returns: An AgentMessage
+    static func planQueryResult(result: String, sender: String = "PlanningAgent") -> AgentMessage {
+        return AgentMessage(messageType: .planQueryResult, sender: sender, recipient: "ConversationAgent", content: result)
+    }
+    
+    /// Create a request for a plan summary
+    /// - Returns: An AgentMessage
+    static func requestPlanSummary(sender: String = "ConversationAgent") -> AgentMessage {
+        return AgentMessage(messageType: .requestPlanSummary, sender: sender, recipient: "PlanningAgent", content: "")
+    }
+    
+    /// Create a plan summary result
+    /// - Parameter summary: The plan summary
+    /// - Returns: An AgentMessage
+    static func planSummaryResult(summary: String, sender: String = "PlanningAgent") -> AgentMessage {
+        return AgentMessage(messageType: .planSummaryResult, sender: sender, recipient: "ConversationAgent", content: summary)
+    }
+    
+    /// Create a request for project context
+    /// - Returns: An AgentMessage
+    static func requestProjectContext(sender: String = "ConversationAgent") -> AgentMessage {
+        return AgentMessage(messageType: .requestProjectContext, sender: sender, recipient: "PlanningAgent", content: "")
+    }
+    
+    /// Create a project context result
+    /// - Parameter context: The project context
+    /// - Returns: An AgentMessage
+    static func projectContextResult(context: String, sender: String = "PlanningAgent") -> AgentMessage {
+        return AgentMessage(messageType: .projectContextResult, sender: sender, recipient: "ConversationAgent", content: context)
+    }
+    
+    /// Create an error message
+    /// - Parameter errorMessage: The error message
+    /// - Returns: An AgentMessage
+    static func error(errorMessage: String, sender: String = "System") -> AgentMessage {
+        return AgentMessage(messageType: .error, sender: sender, recipient: "ConversationAgent", content: errorMessage)
     }
 }

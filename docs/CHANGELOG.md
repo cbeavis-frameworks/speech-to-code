@@ -5,6 +5,50 @@ All notable changes to the SpeechToCode project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2025-03-09
+
+### Added
+- Completed Phase 3.2: Plan Management Features
+- Enhanced PlanningAgent with version control capabilities via PlanVersion structure
+- Added history tracking for plan items with HistoryEntry structure
+- Implemented functions for creating, loading, and deleting plan versions
+- Enhanced reporting with functions for priority and status-based reports
+- Added detailed plan item management with dependencies, tags, and priorities
+- Updated AgentMessage to include new plan management message types
+- Implemented FilePlanStorage for persistent storage of plan data
+- Added test script for verifying Phase 3.2 implementation
+- Added convenience functions for safety versions and demo versions
+
+### Fixed
+- Resolved build errors related to missing type definitions
+- Fixed incomplete implementation of PlanStorageProtocol
+- Added missing helper functions for extracting plan information
+- Enhanced code organization with proper documentation
+- Improved error handling in plan data loading and saving
+- Fixed duplicate function declarations in PlanningAgent class
+- Added @discardableResult attributes to prevent unused result warnings
+- Implemented missing extractPriority and extractTags functions
+- Corrected message type enum references in handler functions
+
+## [0.7.5] - 2025-03-09
+
+### Added
+- Completed Phase 3.1: Plan Storage and Backup Functionality
+- Implemented PlanStorageProtocol for standardized plan data management
+- Created FilePlanStorage implementation for file-based persistence
+- Added PlanBackupInfo structure for tracking backups
+- Enhanced PlanningAgent with backup and recovery capabilities
+- Added methods for creating, restoring, and deleting backups
+- Improved plan item structure with priorities, tags, and dependencies
+- Enhanced plan item helper methods for status updates and dependency management
+- Implemented better plan formatting and user input processing
+- Added error handling for storage operations
+
+### Fixed
+- Improved error handling for file operations
+- Enhanced data persistence reliability
+- Fixed issues with plan data serialization and deserialization
+
 ## [0.7.0] - 2025-03-09
 
 ### Added
