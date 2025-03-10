@@ -11,6 +11,10 @@ class TerminalController: ObservableObject {
     @Published var isClaudeMode: Bool = false
     @Published var claudeCommandHistory: [String] = []
     @Published var lastClaudeResponse: String = ""
+    @Published var claudeResponseType: ClaudeResponseType = .none
+    @Published var lastClaudeResponseTimestamp: Date = Date()
+    @Published var claudeCommandQueue: [ClaudeCommand] = []
+    @Published var isRoutingCommandToClaude: Bool = false
     
     private var outputBuffer: String = ""
     private var cancellables = Set<AnyCancellable>()
@@ -256,15 +260,19 @@ class TerminalController: ObservableObject {
             if task.terminationStatus == 0 {
                 DispatchQueue.main.async {
                     self.terminalOutput += "> claude \"\(command)\"\n"
+                    self.lastClaudeResponseTimestamp = Date()
+                    self.claudeResponseType = .processing
                 }
             } else {
                 DispatchQueue.main.async {
                     self.terminalOutput += "Error sending Claude command: \(command)\n"
+                    self.claudeResponseType = .error
                 }
             }
         } catch {
             DispatchQueue.main.async {
                 self.terminalOutput += "Error: \(error.localizedDescription)\n"
+                self.claudeResponseType = .error
             }
         }
     }
@@ -285,6 +293,20 @@ class TerminalController: ObservableObject {
     func parseClaudeResponse(_ response: String) {
         // Store the raw response
         lastClaudeResponse = response
+        lastClaudeResponseTimestamp = Date()
+        
+        // Detect response type
+        if response.contains("I'm not sure") || response.contains("I don't know") {
+            claudeResponseType = .uncertain
+        } else if response.contains("```") {
+            claudeResponseType = .codeBlock
+        } else if response.contains("function_call") || response.contains("tool_call") {
+            claudeResponseType = .functionCall
+        } else if response.isEmpty || response.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            claudeResponseType = .empty
+        } else {
+            claudeResponseType = .text
+        }
         
         // Extract code blocks
         let codeBlockPattern = #"```(?:\w+)?\s*\n([\s\S]*?)\n```"#
@@ -317,15 +339,25 @@ class TerminalController: ObservableObject {
                 DispatchQueue.main.async {
                     self.isClaudeMode = true
                     self.terminalOutput += "Claude CLI initialized\n"
+                    
+                    // Process any queued commands
+                    if !self.claudeCommandQueue.isEmpty {
+                        self.processClaudeCommandQueue()
+                    }
                 }
             } else {
                 DispatchQueue.main.async {
                     self.terminalOutput += "Error initializing Claude CLI\n"
+                    // Clear the command queue in case of initialization failure
+                    self.claudeCommandQueue = []
+                    self.isRoutingCommandToClaude = false
                 }
             }
         } catch {
             DispatchQueue.main.async {
                 self.terminalOutput += "Error: \(error.localizedDescription)\n"
+                self.claudeCommandQueue = []
+                self.isRoutingCommandToClaude = false
             }
         }
     }
@@ -500,8 +532,139 @@ class TerminalController: ObservableObject {
         isConnected = false
     }
     
+    // MARK: - Claude Command Routing
+    
+    /// Detect command types that should be routed to Claude
+    func detectCommandForClaude(_ command: String) -> Bool {
+        // List of prefixes that indicate a command should be routed to Claude
+        let claudePrefixes = [
+            "explain", "analyze", "summarize", "refactor", "optimize", 
+            "document", "find bug", "fix bug", "add test", "implement", 
+            "create function", "improve", "rewrite", "debug", "add comments"
+        ]
+        
+        // Check if command starts with any of the Claude prefixes
+        for prefix in claudePrefixes {
+            if command.lowercased().hasPrefix(prefix.lowercased()) {
+                return true
+            }
+        }
+        
+        // Check for code-related keywords
+        let codeKeywords = ["function", "class", "method", "api", "interface", "code", "script"]
+        if command.lowercased().contains("how to") {
+            for keyword in codeKeywords {
+                if command.lowercased().contains(keyword) {
+                    return true
+                }
+            }
+        }
+        
+        return false
+    }
+    
+    /// Route a command to either Claude or Terminal based on content
+    func routeCommand(_ command: String) {
+        // If already in Claude mode, send directly to Claude
+        if isClaudeMode {
+            sendClaudeCommand(command)
+            return
+        }
+        
+        // Check if command should be routed to Claude
+        if detectCommandForClaude(command) {
+            // First make sure Claude is initialized if needed
+            if !isClaudeMode {
+                isRoutingCommandToClaude = true
+                initializeClaudeCLI()
+                
+                // Queue the command to be sent after initialization
+                let claudeCommand = ClaudeCommand(command: command, timestamp: Date())
+                claudeCommandQueue.append(claudeCommand)
+                
+                DispatchQueue.main.async {
+                    self.terminalOutput += "Routing to Claude: \(command)\n"
+                }
+            } else {
+                sendClaudeCommand(command)
+            }
+        } else {
+            // Regular terminal command
+            sendCommand(command)
+        }
+    }
+    
+    /// Process queued Claude commands if any
+    func processClaudeCommandQueue() {
+        guard !claudeCommandQueue.isEmpty else { return }
+        
+        // Process the first command in the queue
+        let command = claudeCommandQueue.removeFirst()
+        sendClaudeCommand(command.command)
+        
+        // If there are more commands, schedule them
+        if !claudeCommandQueue.isEmpty {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                self?.processClaudeCommandQueue()
+            }
+        } else {
+            isRoutingCommandToClaude = false
+        }
+    }
+    
+    // Process terminal output to detect and handle Claude responses
+    private func processTerminalOutput(_ output: String) {
+        // Check if output contains Claude prompt
+        let task = Process()
+        let pipe = Pipe()
+        
+        task.executableURL = URL(fileURLWithPath: "/bin/bash")
+        task.arguments = [helperScriptPath, "detect_claude_prompt"]
+        task.standardOutput = pipe
+        
+        do {
+            try task.run()
+            task.waitUntilExit()
+            
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            if let result = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) {
+                if result == "claude_prompt_detected" {
+                    // Claude is waiting for input
+                    self.isInteractiveMode = true
+                    
+                    // If Claude was processing, it has now finished
+                    if claudeResponseType == .processing {
+                        claudeResponseType = .complete
+                    }
+                }
+            }
+        } catch {
+            print("Error detecting Claude prompt: \(error)")
+        }
+    }
+    
     deinit {
         disconnectFromTerminal()
         cancellables.forEach { $0.cancel() }
     }
+}
+
+/// Structure to represent a queued Claude command
+struct ClaudeCommand {
+    let command: String
+    let timestamp: Date
+    var options: String = ""
+}
+
+/// Enumeration for Claude response types
+enum ClaudeResponseType {
+    case none
+    case processing
+    case text
+    case codeBlock
+    case functionCall
+    case uncertain
+    case error
+    case empty
+    case complete
 }

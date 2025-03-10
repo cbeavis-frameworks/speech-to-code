@@ -7,9 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.9.0] - 2025-03-09
-
 ### Added
+- Phase 4.2: Command Routing for Claude Code
+  - Implemented intelligent command routing between terminal and Claude Code
+  - Added detection logic to identify code-related queries and commands
+  - Enhanced TerminalController with command queuing system for Claude initialization
+  - Added response type classification to better process Claude outputs
+  - Updated ClaudeHelper with direct command routing capabilities
 - Phase 4.1: Claude CLI Setup
   - Implemented Claude CLI session management in ClaudeHelper class
   - Added authentication handling for Claude Code CLI with API key support

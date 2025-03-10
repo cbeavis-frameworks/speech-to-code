@@ -6,7 +6,7 @@ class ClaudeHelper: ObservableObject {
     @Published var isClaudeInitialized: Bool = false
     @Published var lastResponse: String = ""
     @Published var commandHistory: [String] = []
-    @Published var sessionStatus: ClaudeSessionStatus = .notInitialized
+    @Published var sessionStatus: ClaudeSessionStatus = .unknown
     @Published var isAuthenticated: Bool = false
     @Published var isProcessing: Bool = false
     
@@ -56,20 +56,33 @@ class ClaudeHelper: ObservableObject {
         let task = Process()
         let pipe = Pipe()
         
-        task.executableURL = URL(fileURLWithPath: "/bin/bash")
-        task.arguments = ["-c", "which claude"]
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/which")
+        task.arguments = ["claude"]
         task.standardOutput = pipe
-        task.standardError = pipe
         
         do {
             try task.run()
             task.waitUntilExit()
             
-            let status = task.terminationStatus
-            completion(status == 0)
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            if let output = String(data: data, encoding: .utf8), !output.isEmpty {
+                DispatchQueue.main.async {
+                    self.isInstalled = true
+                    completion(true)
+                }
+            } else {
+                DispatchQueue.main.async {
+                    self.isInstalled = false
+                    self.sessionStatus = .notInstalled
+                    completion(false)
+                }
+            }
         } catch {
-            print("Error checking Claude installation: \(error)")
-            completion(false)
+            DispatchQueue.main.async {
+                self.isInstalled = false
+                self.sessionStatus = .notInstalled
+                completion(false)
+            }
         }
     }
     
@@ -78,111 +91,226 @@ class ClaudeHelper: ObservableObject {
         let task = Process()
         let pipe = Pipe()
         
-        task.executableURL = URL(fileURLWithPath: "/bin/bash")
-        task.arguments = [terminalController.helperScriptPath, "handle_claude", "check_auth"]
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        task.arguments = ["bash", "-c", "claude /doctor 2>&1 | grep -i 'auth'"]
         task.standardOutput = pipe
-        task.standardError = pipe
         
         do {
             try task.run()
             task.waitUntilExit()
             
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            if let output = String(data: data, encoding: .utf8) {
-                completion(output.contains("authenticated"))
+            if let output = String(data: data, encoding: .utf8), output.contains("authenticated") {
+                DispatchQueue.main.async {
+                    self.isAuthenticated = true
+                    completion(true)
+                }
             } else {
-                completion(false)
+                DispatchQueue.main.async {
+                    self.isAuthenticated = false
+                    completion(false)
+                }
             }
         } catch {
-            print("Error checking Claude authentication: \(error)")
-            completion(false)
+            DispatchQueue.main.async {
+                self.isAuthenticated = false
+                completion(false)
+            }
         }
     }
     
-    /// Initialize Claude CLI in the current directory
-    func initializeClaudeCLI(projectPath: String? = nil, completion: @escaping (Bool) -> Void) {
-        sessionStatus = .initializing
-        isProcessing = true
-        
-        let path = projectPath ?? FileManager.default.currentDirectoryPath
-        
+    /// Authenticate with Claude CLI using API key
+    func authenticateClaudeCLI(apiKey: String? = nil, completion: @escaping (Bool) -> Void) {
         let task = Process()
         let pipe = Pipe()
         
-        task.executableURL = URL(fileURLWithPath: "/bin/bash")
-        task.arguments = [terminalController.helperScriptPath, "handle_claude", "init", path]
-        task.standardOutput = pipe
-        task.standardError = pipe
+        var key = apiKey
         
-        do {
-            try task.run()
-            task.waitUntilExit()
-            
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            let output = String(data: data, encoding: .utf8) ?? ""
-            
-            if task.terminationStatus == 0 {
-                isClaudeInitialized = true
-                sessionStatus = .initialized
-                print("Claude CLI initialized successfully in \(path)")
-                completion(true)
-            } else {
-                print("Error initializing Claude CLI: \(output)")
-                sessionStatus = .initializationFailed
-                completion(false)
-            }
-        } catch {
-            print("Error: \(error.localizedDescription)")
-            sessionStatus = .initializationFailed
-            completion(false)
+        if key == nil, let config = config {
+            key = config.apiKey
         }
         
-        isProcessing = false
-    }
-    
-    /// Authenticate with Claude CLI using the API key
-    func authenticateClaudeCLI(apiKey: String? = nil, completion: @escaping (Bool) -> Void) {
-        isProcessing = true
-        
-        // Use provided API key or get from Config
-        let key = apiKey ?? Config.Anthropic.apiKey
-        
-        guard !key.isEmpty else {
-            print("Cannot authenticate: API key is empty")
-            completion(false)
-            isProcessing = false
+        guard let validKey = key, !validKey.isEmpty else {
+            DispatchQueue.main.async {
+                completion(false)
+            }
             return
         }
         
-        let task = Process()
-        let pipe = Pipe()
-        
-        task.executableURL = URL(fileURLWithPath: "/bin/bash")
-        task.arguments = [terminalController.helperScriptPath, "handle_claude", "login", key]
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        task.arguments = ["bash", "-c", "claude login --api-key=\"\(validKey)\""]
         task.standardOutput = pipe
-        task.standardError = pipe
         
         do {
             try task.run()
             task.waitUntilExit()
             
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            let output = String(data: data, encoding: .utf8) ?? ""
-            
-            if task.terminationStatus == 0 && !output.contains("error") {
-                isAuthenticated = true
-                print("Claude CLI authenticated successfully")
-                completion(true)
+            if task.terminationStatus == 0 {
+                DispatchQueue.main.async {
+                    self.isAuthenticated = true
+                    self.sessionStatus = .active
+                    
+                    // Update config if needed
+                    if self.config == nil {
+                        self.config = ClaudeConfig(apiKey: validKey)
+                    } else {
+                        self.config?.apiKey = validKey
+                    }
+                    
+                    completion(true)
+                }
             } else {
-                print("Error authenticating Claude CLI: \(output)")
-                completion(false)
+                DispatchQueue.main.async {
+                    self.isAuthenticated = false
+                    self.sessionStatus = .notAuthenticated
+                    completion(false)
+                }
             }
         } catch {
-            print("Error during Claude authentication: \(error)")
-            completion(false)
+            DispatchQueue.main.async {
+                self.isAuthenticated = false
+                self.sessionStatus = .error
+                completion(false)
+            }
+        }
+    }
+    
+    /// Initialize Claude CLI in a project
+    func initializeClaudeCLI(projectPath: String? = nil, completion: @escaping (Bool) -> Void) {
+        let task = Process()
+        let pipe = Pipe()
+        
+        var path = projectPath
+        
+        if path == nil, let config = config {
+            path = config.workspacePath
         }
         
-        isProcessing = false
+        var command = "claude init"
+        if let validPath = path, !validPath.isEmpty {
+            command = "cd \"\(validPath)\" && \(command)"
+        }
+        
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        task.arguments = ["bash", "-c", command]
+        task.standardOutput = pipe
+        
+        do {
+            try task.run()
+            task.waitUntilExit()
+            
+            if task.terminationStatus == 0 {
+                DispatchQueue.main.async {
+                    self.sessionStatus = .active
+                    
+                    // Update config if needed
+                    if let validPath = path, !validPath.isEmpty {
+                        if self.config == nil {
+                            self.config = ClaudeConfig(apiKey: "", workspacePath: validPath)
+                        } else {
+                            self.config?.workspacePath = validPath
+                        }
+                    }
+                    
+                    completion(true)
+                }
+            } else {
+                DispatchQueue.main.async {
+                    completion(false)
+                }
+            }
+        } catch {
+            DispatchQueue.main.async {
+                self.sessionStatus = .error
+                completion(false)
+            }
+        }
+    }
+    
+    // MARK: - Command Routing
+    
+    /// Determine if a command should be routed to Claude based on content
+    func shouldRouteToClaudeCLI(_ command: String) -> Bool {
+        // List of prefixes that indicate a command should be routed to Claude
+        let claudePrefixes = [
+            "explain", "analyze", "summarize", "refactor", "optimize", 
+            "document", "find bug", "fix bug", "add test", "implement", 
+            "create function", "improve", "rewrite", "debug", "add comments"
+        ]
+        
+        // Check if command starts with any of the Claude prefixes
+        for prefix in claudePrefixes {
+            if command.lowercased().hasPrefix(prefix.lowercased()) {
+                return true
+            }
+        }
+        
+        // Check for code-related keywords
+        let codeKeywords = ["function", "class", "method", "api", "interface", "code", "script"]
+        if command.lowercased().contains("how to") {
+            for keyword in codeKeywords {
+                if command.lowercased().contains(keyword) {
+                    return true
+                }
+            }
+        }
+        
+        return false
+    }
+    
+    /// Execute a Claude command for code-related tasks
+    func executeCodeCommand(_ command: String, options: String = "", completion: @escaping (String, Bool) -> Void) {
+        guard isAuthenticated else {
+            checkClaudeSetup()
+            completion("Claude is not authenticated. Please check installation and authentication.", false)
+            return
+        }
+        
+        isProcessing = true
+        
+        // Send command to terminal through TerminalController
+        terminalController.sendClaudeCommand(command, options: options)
+        
+        // Track command in history
+        addToCommandHistory(command)
+        
+        // We don't get immediate output as it's handled by the terminal
+        // The terminalController output subscription will process responses
+        completion("Command sent to Claude", true)
+    }
+    
+    /// Route a command to Claude if appropriate, otherwise to terminal
+    func routeCommand(_ command: String, completion: @escaping (Bool) -> Void) {
+        if shouldRouteToClaudeCLI(command) {
+            // First make sure Claude is initialized if needed
+            if !isClaudeInitialized {
+                terminalController.initializeClaudeCLI()
+                
+                // Wait for initialization to complete before sending command
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+                    self?.executeCodeCommand(command) { _, success in
+                        completion(success)
+                    }
+                }
+            } else {
+                executeCodeCommand(command) { _, success in
+                    completion(success)
+                }
+            }
+        } else {
+            // Not a Claude command, send to regular terminal
+            terminalController.sendCommand(command)
+            completion(true)
+        }
+    }
+    
+    /// Add a command to the history
+    private func addToCommandHistory(_ command: String) {
+        commandHistory.append(command)
+        // Keep history at a reasonable size
+        if commandHistory.count > 50 {
+            commandHistory.removeFirst()
+        }
     }
     
     /// Format and send a prompt to Claude
@@ -387,24 +515,15 @@ struct ParsedClaudeResponse {
 
 /// Represents the status of the Claude CLI session
 enum ClaudeSessionStatus: String {
+    case unknown
     case notInstalled = "Claude CLI is not installed"
-    case notInitialized = "Not initialized"
-    case initializing = "Initializing..."
-    case initialized = "Initialized"
-    case initializationFailed = "Initialization failed"
-    case authenticationRequired = "Authentication required"
+    case notAuthenticated = "Claude CLI is not authenticated"
     case active = "Active"
     case error = "Error"
 }
 
 /// Configuration for Claude CLI
 struct ClaudeConfig {
-    var model: String = "claude-3-haiku-20240307" // Default model
-    var temperature: Double = 0.7
-    var maxTokens: Int = 4000
-    
-    /// Get config as command line arguments string
-    var asCommandLineArgs: String {
-        return "--model=\(model) --temperature=\(temperature) --max-tokens=\(maxTokens)"
-    }
+    var apiKey: String
+    var workspacePath: String?
 }
