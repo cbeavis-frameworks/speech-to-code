@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Phase 5.3: Workflow Automation
+  - Implemented WorkflowManager class to manage automated workflows
+  - Created workflow templates for common development tasks (code review, project setup, etc.)
+  - Added task execution sequences with progress tracking
+  - Implemented workflow customization and reporting features
+  - Enhanced AgentOrchestrator to integrate with WorkflowManager
+  - Added comprehensive workflow state management and error handling
+  - Created test script (test-phase-5-3.swift) to verify workflow automation functionality
+  - Added support for pausing, resuming, and cancelling workflows
 - Phase 5.2: Context Management
   - Implemented ContextManager class to facilitate context sharing between agents
   - Added project context initialization from planning agent

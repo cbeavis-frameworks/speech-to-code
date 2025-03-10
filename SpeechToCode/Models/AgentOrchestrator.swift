@@ -47,6 +47,9 @@ class AgentOrchestrator: ObservableObject, @unchecked Sendable {
     /// Terminal controller
     var terminalController: TerminalController?
     
+    /// Workflow manager
+    var workflowManager: WorkflowManager?
+    
     /// Cancellables for Combine subscriptions
     private var cancellables = Set<AnyCancellable>()
     
@@ -81,6 +84,11 @@ class AgentOrchestrator: ObservableObject, @unchecked Sendable {
         // Create and initialize the context manager
         let contextManager = ContextManager()
         self.contextManager = contextManager
+        
+        // Create and initialize the workflow manager
+        let workflowManager = WorkflowManager()
+        workflowManager.connectToOrchestrator(self)
+        self.workflowManager = workflowManager
         
         // Connect agents to each other
         connectAgents()
@@ -119,6 +127,11 @@ class AgentOrchestrator: ObservableObject, @unchecked Sendable {
         
         // Connect orchestrator to context manager
         contextManager.connectOrchestrator(self)
+        
+        // Connect workflow manager to orchestrator
+        if let workflowManager = workflowManager {
+            workflowManager.connectToOrchestrator(self)
+        }
     }
     
     /// Get the conversation agent
@@ -137,6 +150,12 @@ class AgentOrchestrator: ObservableObject, @unchecked Sendable {
     /// - Returns: The context manager
     func getContextManager() -> ContextManager? {
         return contextManager
+    }
+    
+    /// Get the workflow manager
+    /// - Returns: The workflow manager
+    func getWorkflowManager() -> WorkflowManager? {
+        return workflowManager
     }
     
     /// Connect to a Conversation Agent
@@ -177,6 +196,15 @@ class AgentOrchestrator: ObservableObject, @unchecked Sendable {
         if let planningAgent = planningAgent {
             manager.connectPlanningAgent(planningAgent)
         }
+    }
+    
+    /// Connect to a Workflow Manager
+    /// - Parameter manager: The workflow manager to connect
+    func connectWorkflowManager(_ manager: WorkflowManager) {
+        self.workflowManager = manager
+        
+        // Also connect the workflow manager to the orchestrator
+        manager.connectToOrchestrator(self)
     }
     
     /// Start processing with all agents
