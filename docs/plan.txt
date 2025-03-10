@@ -88,10 +88,10 @@ The goal of this phase is to add voice processing capabilities to the SpeechToCo
 - [x] Add authentication handling for Claude Code
 
 ### 4.2. Command Routing
-- [ ] Enhance TerminalController to route commands to Claude Code
-- [ ] Implement specialized command formatting for Claude Code
-- [ ] Add response parsing for Claude Code output
-- [ ] Create interactive prompt handling for Claude Code
+- [x] Enhance TerminalController to route commands to Claude Code
+- [x] Implement specialized command formatting for Claude Code
+- [x] Add response parsing for Claude Code output
+- [x] Create interactive prompt handling for Claude Code
 
 ### 4.3. Automated Decision Making
 - [ ] Implement decision tree for common Claude Code prompts
