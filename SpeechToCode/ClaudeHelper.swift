@@ -9,14 +9,14 @@ class ClaudeHelper: ObservableObject {
     @Published var sessionStatus: ClaudeSessionStatus = .unknown
     @Published var isAuthenticated: Bool = false
     @Published var isProcessing: Bool = false
+    @Published var isInstalled: Bool = false
     
     private var terminalController: TerminalController
     private var cancellables = Set<AnyCancellable>()
-    private let config: ClaudeConfig
+    private var config: ClaudeConfig?
     
     init(terminalController: TerminalController) {
         self.terminalController = terminalController
-        self.config = ClaudeConfig()
         
         // Subscribe to terminal output to detect Claude responses
         terminalController.$terminalOutput
@@ -35,7 +35,7 @@ class ClaudeHelper: ObservableObject {
             guard let self = self else { return }
             
             if isInstalled {
-                self.sessionStatus = .notInitialized
+                self.sessionStatus = .notAuthenticated
                 self.checkClaudeAuthentication { isAuthenticated in
                     self.isAuthenticated = isAuthenticated
                     if isAuthenticated {
@@ -126,8 +126,8 @@ class ClaudeHelper: ObservableObject {
         
         var key = apiKey
         
-        if key == nil, let config = config {
-            key = config.apiKey
+        if key == nil, let configKey = config?.apiKey {
+            key = configKey
         }
         
         guard let validKey = key, !validKey.isEmpty else {
@@ -152,7 +152,7 @@ class ClaudeHelper: ObservableObject {
                     
                     // Update config if needed
                     if self.config == nil {
-                        self.config = ClaudeConfig(apiKey: validKey)
+                        self.config = ClaudeConfig(apiKey: validKey, workspacePath: nil)
                     } else {
                         self.config?.apiKey = validKey
                     }
@@ -182,8 +182,8 @@ class ClaudeHelper: ObservableObject {
         
         var path = projectPath
         
-        if path == nil, let config = config {
-            path = config.workspacePath
+        if path == nil, let configPath = config?.workspacePath {
+            path = configPath
         }
         
         var command = "claude init"
@@ -342,38 +342,37 @@ class ClaudeHelper: ObservableObject {
     }
     
     /// Start a new Claude Code session
-    func startClaudeSession(projectPath: String? = nil, completion: @escaping (Bool) -> Void) {
+    func startClaudeSession(projectPath: String? = nil, apiKey: String? = nil, completion: @escaping (Bool) -> Void) {
         // First check if Claude is installed
         checkClaudeInstallation { [weak self] isInstalled in
             guard let self = self else { return }
             
-            if !isInstalled {
-                print("Claude CLI is not installed")
-                self.sessionStatus = .notInstalled
-                completion(false)
-                return
-            }
-            
-            // Then check if authenticated
-            self.checkClaudeAuthentication { isAuthenticated in
-                if !isAuthenticated {
-                    print("Claude CLI is not authenticated")
-                    self.sessionStatus = .authenticationRequired
-                    completion(false)
-                    return
-                }
-                
-                // Initialize Claude CLI
-                self.initializeClaudeCLI(projectPath: projectPath) { success in
-                    if success {
-                        // Run a basic command to ensure the session is active
-                        self.executeSlashCommand("clear")
-                        self.sessionStatus = .active
-                        completion(true)
+            if isInstalled {
+                // Check if Claude is authenticated
+                self.checkClaudeAuthentication { isAuthenticated in
+                    if !isAuthenticated {
+                        // Try to authenticate
+                        if let key = apiKey {
+                            self.authenticateClaudeCLI(apiKey: key) { success in
+                                if success {
+                                    // Now initialize
+                                    self.initializeClaudeCLI(projectPath: projectPath, completion: completion)
+                                } else {
+                                    completion(false)
+                                }
+                            }
+                        } else {
+                            completion(false)
+                        }
                     } else {
-                        completion(false)
+                        // Already authenticated, just initialize
+                        self.initializeClaudeCLI(projectPath: projectPath, completion: completion)
                     }
                 }
+            } else {
+                // Claude is not installed
+                self.sessionStatus = .notInstalled
+                completion(false)
             }
         }
     }
@@ -463,7 +462,7 @@ class ClaudeHelper: ObservableObject {
     /// End the current Claude session
     func endClaudeSession() {
         executeSlashCommand("clear")
-        sessionStatus = .notInitialized
+        sessionStatus = .notAuthenticated
         isClaudeInitialized = false
     }
     
