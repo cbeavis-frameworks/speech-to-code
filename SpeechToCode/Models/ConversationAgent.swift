@@ -25,8 +25,21 @@ class ConversationAgent: ObservableObject, VoiceProcessorDelegate, RealtimeSessi
     /// References to other components
     private var realtimeSession: RealtimeSession?
     private var planningAgent: PlanningAgent?
-    private var terminalController: Any? // Using Any since we don't have the actual type yet
+    private var terminalController: TerminalController?
     private weak var orchestrator: AgentOrchestrator?
+    private var contextManager: ContextManager?
+    
+    /// Set the planning agent
+    /// - Parameter agent: The planning agent to use
+    func setPlanningAgent(_ agent: PlanningAgent) {
+        self.planningAgent = agent
+    }
+    
+    /// Set the terminal controller
+    /// - Parameter controller: The terminal controller to use
+    func setTerminalController(_ controller: TerminalController) {
+        self.terminalController = controller
+    }
     
     /// Voice processing configuration
     private var voiceActivationEnabled: Bool = true
@@ -45,6 +58,12 @@ class ConversationAgent: ObservableObject, VoiceProcessorDelegate, RealtimeSessi
     /// Cleanup resources
     private var cancellables = Set<AnyCancellable>()
     
+    /// Maximum number of messages to keep in memory
+    private let maxMessagesInMemory = 50
+    
+    /// Minimum messages to retain for context
+    private let minMessagesForContext = 10
+    
     /// Initialize a new Conversation Agent
     init() {
         // Initialize with default state
@@ -59,12 +78,28 @@ class ConversationAgent: ObservableObject, VoiceProcessorDelegate, RealtimeSessi
     
     /// Connect to a Realtime Session
     /// - Parameter session: The Realtime session to connect to
-    func connectToRealtimeSession(_ session: Any) {
-        if let realtimeSession = session as? RealtimeSession {
-            self.realtimeSession = realtimeSession
-            realtimeSession.delegate = self
-            setupRealtimeSessionHandlers()
-        }
+    func connectToRealtimeSession(_ session: RealtimeSession) {
+        self.realtimeSession = session
+        session.delegate = self
+        setupRealtimeSessionHandlers()
+    }
+    
+    /// Connect to a Planning Agent
+    /// - Parameter agent: The planning agent to connect
+    func connectToPlanningAgent(_ agent: PlanningAgent) {
+        self.planningAgent = agent
+    }
+    
+    /// Connect to a Context Manager
+    /// - Parameter manager: The context manager to connect
+    func connectToContextManager(_ manager: ContextManager) {
+        self.contextManager = manager
+    }
+    
+    /// Connect to a Terminal Controller
+    /// - Parameter controller: The Terminal controller to connect to
+    func connectToTerminalController(_ controller: TerminalController) {
+        self.terminalController = controller
     }
     
     /// Set up handlers to respond to Realtime session events
@@ -99,18 +134,6 @@ class ConversationAgent: ObservableObject, VoiceProcessorDelegate, RealtimeSessi
                 self.currentTranscription = transcription
             }
             .store(in: &cancellables)
-    }
-    
-    /// Connect to a Planning Agent
-    /// - Parameter agent: The Planning agent to connect to
-    func connectToPlanningAgent(_ agent: PlanningAgent) {
-        self.planningAgent = agent
-    }
-    
-    /// Connect to a Terminal Controller
-    /// - Parameter controller: The Terminal controller to connect to
-    func connectToTerminalController(_ controller: Any) {
-        self.terminalController = controller
     }
     
     // MARK: - VoiceProcessorDelegate Methods
@@ -684,5 +707,126 @@ class ConversationAgent: ObservableObject, VoiceProcessorDelegate, RealtimeSessi
         }
         
         return nil
+    }
+    
+    /// Generate a summary of the conversation for context
+    /// - Returns: Summarized conversation history
+    func generateConversationSummary() async -> String {
+        let messageCount = messages.count
+        
+        // If we have no messages, return an empty summary
+        if messageCount == 0 {
+            return "No conversation history yet."
+        }
+        
+        // Calculate how many messages to include in the summary
+        let messagesToInclude = min(maxMessagesInMemory, max(messageCount, minMessagesForContext))
+        let startIndex = max(0, messageCount - messagesToInclude)
+        
+        // Create the summary
+        var summary = "# Conversation History\n\n"
+        summary += "Last \(messagesToInclude) messages as of \(Date()):\n\n"
+        
+        // Add recent messages to the summary, focusing on user inputs and assistant outputs
+        for i in startIndex..<messageCount {
+            let message = messages[i]
+            
+            switch message.messageType {
+            case .userInput, .voiceInput:
+                summary += "**User**: \(message.content)\n\n"
+            case .assistantOutput, .voiceOutput:
+                summary += "**Assistant**: \(message.content)\n\n"
+            case .terminalCommand:
+                summary += "**Command**: \(message.content)\n\n"
+            case .terminalOutput:
+                // For terminal output, include a condensed version to save space
+                let condensedOutput = condenseTerminalOutput(message.content)
+                summary += "**Output**: \(condensedOutput)\n\n"
+            default:
+                // Skip other message types to focus on the conversation
+                continue
+            }
+        }
+        
+        return summary
+    }
+    
+    /// Condense terminal output to save space in context
+    /// - Parameter output: The terminal output
+    /// - Returns: Condensed terminal output
+    private func condenseTerminalOutput(_ output: String) -> String {
+        // If the output is short, return it as is
+        if output.count < 100 {
+            return output
+        }
+        
+        // Otherwise, create a condensed version with first and last few lines
+        let lines = output.components(separatedBy: "\n")
+        
+        // If there aren't many lines, return a slightly truncated version
+        if lines.count < 10 {
+            return output.prefix(200) + (output.count > 200 ? "..." : "")
+        }
+        
+        // For longer outputs, take first 3 and last 3 lines
+        let firstLines = lines.prefix(3).joined(separator: "\n")
+        let lastLines = lines.suffix(3).joined(separator: "\n")
+        
+        return "\(firstLines)\n...\n\(lastLines)"
+    }
+    
+    /// Get combined context from the context manager
+    /// - Returns: Combined context for the agent
+    func getCombinedContext() async -> String {
+        // If we don't have a context manager, create conversation context only
+        guard let contextManager = contextManager else {
+            return await generateConversationSummary()
+        }
+        
+        // Get context from context manager
+        let contextTypes: [ContextManager.ContextType] = [.project, .conversation, .taskStatus, .codeStructure]
+        return contextManager.getCombinedContext(types: contextTypes)
+    }
+    
+    /// Refresh all context from the manager
+    /// - Returns: Success indicator
+    @discardableResult
+    func refreshContext() async -> Bool {
+        guard let contextManager = contextManager else {
+            return false
+        }
+        
+        // Generate a new conversation summary
+        let conversationSummary = await generateConversationSummary()
+        
+        // Update it in the context manager
+        contextManager.updateContextSummary(conversationSummary, type: .conversation)
+        
+        // Request a full context refresh
+        return await contextManager.refreshContextForAgents()
+    }
+    
+    /// Process an agent message with context
+    /// - Parameter message: The message to process
+    /// - Returns: Response with context incorporated
+    func processMessageWithContext(_ message: AgentMessage) async -> AgentMessage {
+        // Get the combined context
+        let context = await getCombinedContext()
+        
+        // Create metadata with context
+        var metadata = message.metadata
+        metadata["context"] = context
+        
+        // Create new message with the context metadata
+        let contextualMessage = AgentMessage(
+            messageType: message.messageType,
+            sender: message.sender,
+            recipient: message.recipient,
+            content: message.content,
+            metadata: metadata
+        )
+        
+        // Process the message with context
+        return await processIncomingAgentMessage(contextualMessage)
     }
 }

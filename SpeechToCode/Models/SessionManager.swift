@@ -91,7 +91,7 @@ class SessionManager: ObservableObject {
                             await self.attemptRealtimeReconnection()
                         }
                     }
-                case .error(let _):
+                case .error:
                     self.isRealtimeConnected = false
                     self.onRealtimeDisconnected?()
                     if self.autoReconnect && self.state == .active {
