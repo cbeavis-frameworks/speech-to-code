@@ -802,7 +802,7 @@ class PlanningAgent: ObservableObject {
         // Process messages from other agents
         switch message.messageType {
         case .requestPlanUpdate:
-            if let updateResult = handlePlanUpdateRequest(message.content) {
+            if handlePlanUpdateRequest(message.content) {
                 return AgentMessage(messageType: .planUpdateConfirmation, sender: "PlanningAgent", recipient: message.sender, content: "Plan updated successfully")
             } else {
                 return AgentMessage(messageType: .error, sender: "PlanningAgent", recipient: message.sender, content: "Invalid plan update request")
@@ -824,7 +824,7 @@ class PlanningAgent: ObservableObject {
     
     /// Handle a request to update the plan
     /// - Parameter request: The request string
-    private func handlePlanUpdateRequest(_ request: String) -> Bool? {
+    private func handlePlanUpdateRequest(_ request: String) -> Bool {
         // Extract plan item details from the request
         if let title = extractTitle(from: request),
            let description = extractDescription(from: request) {
@@ -844,7 +844,7 @@ class PlanningAgent: ObservableObject {
             addPlanItem(newItem)
             return true
         }
-        return nil
+        return false
     }
     
     /// Extract priority from a plan update request

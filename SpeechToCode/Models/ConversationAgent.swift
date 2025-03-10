@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import Combine
 
 /// Conversation agent model to handle user interaction and orchestrate workflow
 @available(macOS 10.15, *)
@@ -22,9 +23,10 @@ class ConversationAgent: ObservableObject, VoiceProcessorDelegate, RealtimeSessi
     @Published var audioLevel: Float = 0.0
     
     /// References to other components
-    private var realtimeSession: Any?
+    private var realtimeSession: RealtimeSession?
     private var planningAgent: PlanningAgent?
     private var terminalController: Any? // Using Any since we don't have the actual type yet
+    private weak var orchestrator: AgentOrchestrator?
     
     /// Voice processing configuration
     private var voiceActivationEnabled: Bool = true
@@ -40,21 +42,63 @@ class ConversationAgent: ObservableObject, VoiceProcessorDelegate, RealtimeSessi
     /// Agent communication message handler
     private var messageHandlers: [AgentMessage.MessageType: (AgentMessage) async -> AgentMessage] = [:]
     
+    /// Cleanup resources
+    private var cancellables = Set<AnyCancellable>()
+    
     /// Initialize a new Conversation Agent
     init() {
         // Initialize with default state
         setupMessageHandlers()
     }
     
+    /// Connect to an Orchestrator
+    /// - Parameter orchestrator: The agent orchestrator to connect to
+    func connectToOrchestrator(_ orchestrator: AgentOrchestrator) {
+        self.orchestrator = orchestrator
+    }
+    
     /// Connect to a Realtime Session
     /// - Parameter session: The Realtime session to connect to
     func connectToRealtimeSession(_ session: Any) {
-        self.realtimeSession = session
+        if let realtimeSession = session as? RealtimeSession {
+            self.realtimeSession = realtimeSession
+            realtimeSession.delegate = self
+            setupRealtimeSessionHandlers()
+        }
     }
     
     /// Set up handlers to respond to Realtime session events
     private func setupRealtimeSessionHandlers() {
-        // Implementation will be updated once we fix the build errors
+        guard let realtimeSession = realtimeSession else { return }
+        
+        // Subscribe to session state changes
+        realtimeSession.$sessionState
+            .sink { [weak self] sessionState in
+                guard let self = self else { return }
+                
+                switch sessionState {
+                case .error(let message):
+                    self.state = .error("Realtime session error: \(message)")
+                case .disconnected:
+                    if self.listeningForVoice {
+                        self.stopListening()
+                    }
+                    if case .processing = self.state {
+                        self.state = .idle
+                    }
+                default:
+                    break
+                }
+            }
+            .store(in: &cancellables)
+            
+        // Subscribe to transcription updates
+        realtimeSession.$currentTranscription
+            .sink { [weak self] transcription in
+                guard let self = self else { return }
+                self.currentTranscription = transcription
+            }
+            .store(in: &cancellables)
     }
     
     /// Connect to a Planning Agent
@@ -83,6 +127,12 @@ class ConversationAgent: ObservableObject, VoiceProcessorDelegate, RealtimeSessi
     
     func voiceProcessor(_ processor: VoiceProcessor, didDetectVoiceActivity active: Bool) {
         // Update UI or state based on voice activity detection
+        if active && !listeningForVoice && voiceActivationEnabled {
+            // Auto-start listening if voice activity detected and not already listening
+            Task {
+                _ = await startListening()
+            }
+        }
     }
     
     func voiceProcessor(_ processor: VoiceProcessor, didChangeAudioLevel level: Float) {
@@ -101,6 +151,20 @@ class ConversationAgent: ObservableObject, VoiceProcessorDelegate, RealtimeSessi
     
     func realtimeSession(_ session: RealtimeSession, didChangeState state: RealtimeSession.SessionState) {
         // Handle state changes
+        switch state {
+        case .error(let message):
+            DispatchQueue.main.async {
+                self.state = .error("Realtime session error: \(message)")
+            }
+        case .disconnected:
+            DispatchQueue.main.async {
+                if self.listeningForVoice {
+                    self.stopListening()
+                }
+            }
+        default:
+            break
+        }
     }
     
     func realtimeSession(_ session: RealtimeSession, didReceiveMessage message: AgentMessage) {
@@ -126,44 +190,64 @@ class ConversationAgent: ObservableObject, VoiceProcessorDelegate, RealtimeSessi
         // Set the input processing flag
         isProcessingInput = true
         
+        // Create a task ID with the orchestrator if available
+        let taskId = orchestrator?.addPendingTask()
+        
         // Stop listening to get the final transcription
-        if let session = realtimeSession as? RealtimeSession {
-            session.stopListening()
+        realtimeSession.stopListening()
+        
+        // Get the final transcription
+        let finalTranscription = currentTranscription
+        
+        // Create a voice input message
+        let voiceMessage = AgentMessage.voiceInput(transcription: finalTranscription)
+        
+        // Add the message to our messages array
+        DispatchQueue.main.async {
+            self.messages.append(voiceMessage)
+        }
+        
+        // Send the transcription to the Realtime API
+        let success = await realtimeSession.sendUserMessage(content: finalTranscription)
+        
+        // Complete the task if we have an orchestrator
+        if let taskId = taskId {
+            orchestrator?.completePendingTask(taskId)
         }
         
         // Reset processing flag
         isProcessingInput = false
-        return true
+        return success
     }
     
     /// Starts listening for voice commands
     /// - Returns: Boolean indicating success
-    func startListening() -> Bool {
+    @discardableResult
+    func startListening() async -> Bool {
         guard let realtimeSession = realtimeSession, 
               !listeningForVoice, !isProcessingInput else {
             return false
         }
         
-        // Set listening state
-        listeningForVoice = true
-        
-        // Register for transcription updates
-        if let session = realtimeSession as? RealtimeSession {
-            session.onTranscription { [weak self] (transcription: String) in
-                guard let self = self else { return }
-                self.currentTranscription = transcription
-            }
+        // Set state to listening
+        DispatchQueue.main.async {
+            self.state = .listeningForVoice
+            self.listeningForVoice = true
+            self.isListening = true
         }
         
         // Start listening via realtime session
-        if let session = realtimeSession as? RealtimeSession {
-            let success = session.startListening()
-            if !success {
-                listeningForVoice = false
+        let success =  realtimeSession.startListening()
+        
+        if !success {
+            DispatchQueue.main.async {
+                self.state = .idle
+                self.listeningForVoice = false
+                self.isListening = false
             }
         }
         
-        return true
+        return success
     }
     
     /// Stops listening for voice commands
@@ -173,23 +257,25 @@ class ConversationAgent: ObservableObject, VoiceProcessorDelegate, RealtimeSessi
         }
         
         // Stop listening via realtime session
-        if let session = realtimeSession as? RealtimeSession {
-            session.stopListening()
-        }
+        realtimeSession.stopListening()
         
         // Reset listening state
-        listeningForVoice = false
-        currentTranscription = ""
+        DispatchQueue.main.async {
+            self.listeningForVoice = false
+            self.isListening = false
+            self.currentTranscription = ""
+            self.state = .idle
+        }
     }
     
     /// Toggle voice listening state
     /// - Returns: Boolean indicating if listening is now active
-    func toggleListening() -> Bool {
+    func toggleListening() async -> Bool {
         if listeningForVoice {
             stopListening()
             return false
         } else {
-            return startListening()
+            return await startListening()
         }
     }
     
@@ -202,38 +288,37 @@ class ConversationAgent: ObservableObject, VoiceProcessorDelegate, RealtimeSessi
             self.state = .processing
         }
         
-        // Create a user input message
+        // Create task ID with orchestrator if available
+        let taskId = orchestrator?.addPendingTask()
+        
+        // Create user input message
         let userMessage = AgentMessage.userInput(content: userInput)
         
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
+        // Add message to our messages array
+        DispatchQueue.main.async {
             self.messages.append(userMessage)
         }
         
-        // Check if this input should be routed to PlanningAgent
-        if userInput.lowercased().contains("plan") || 
-           userInput.lowercased().contains("task") ||
-           userInput.lowercased().contains("context") {
-            
-            await requestProjectContextFromPlanningAgent()
+        var success = false
+        
+        // Send user input to Realtime API
+        if let realtimeSession = realtimeSession {
+            success = await realtimeSession.sendUserMessage(content: userInput)
         }
         
-        // Forward to Realtime session (if available)
-        if let realtimeSession = realtimeSession as? RealtimeSession {
-            let success = await realtimeSession.sendUserMessage(content: userInput)
-            if !success {
-                DispatchQueue.main.async {
-                    self.state = .error("Failed to send message to Realtime session")
-                }
-                return false
+        // Complete task if we have an orchestrator
+        if let taskId = taskId {
+            orchestrator?.completePendingTask(taskId)
+        }
+        
+        // Return to idle state if no longer processing
+        if case .processing = state {
+            DispatchQueue.main.async {
+                self.state = .idle
             }
         }
         
-        // Return to idle state
-        DispatchQueue.main.async {
-            self.state = .idle
-        }
-        return true
+        return success
     }
     
     /// Process a terminal command
@@ -336,7 +421,7 @@ class ConversationAgent: ObservableObject, VoiceProcessorDelegate, RealtimeSessi
             }
             
             // Log the result and potentially send to Realtime API
-            if let realtimeSession = self.realtimeSession as? RealtimeSession {
+            if let realtimeSession = self.realtimeSession {
                 // Format the plan info nicely for the user
                 let formattedContent = "📋 Plan Information:\n\(message.content)"
                 Task {
@@ -366,7 +451,7 @@ class ConversationAgent: ObservableObject, VoiceProcessorDelegate, RealtimeSessi
             }
             
             // Notify the user
-            if let realtimeSession = self.realtimeSession as? RealtimeSession {
+            if let realtimeSession = self.realtimeSession {
                 Task {
                     await realtimeSession.sendAssistantMessage(content: "✅ " + message.content)
                 }
@@ -394,7 +479,7 @@ class ConversationAgent: ObservableObject, VoiceProcessorDelegate, RealtimeSessi
             }
             
             // Format and send to user
-            if let realtimeSession = self.realtimeSession as? RealtimeSession {
+            if let realtimeSession = self.realtimeSession {
                 let formattedContent = "📊 Plan Summary:\n\(message.content)"
                 Task {
                     await realtimeSession.sendAssistantMessage(content: formattedContent)
@@ -423,7 +508,7 @@ class ConversationAgent: ObservableObject, VoiceProcessorDelegate, RealtimeSessi
             }
             
             // Use the project context in our communication with the user
-            if let realtimeSession = self.realtimeSession as? RealtimeSession {
+            if let realtimeSession = self.realtimeSession {
                 Task {
                     // Enhance with project context rather than just forwarding directly
                     await realtimeSession.setContext(message.content)
