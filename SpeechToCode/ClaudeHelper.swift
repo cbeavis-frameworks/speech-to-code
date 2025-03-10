@@ -497,11 +497,230 @@ class ClaudeHelper: ObservableObject {
                     // Claude is waiting for input
                     terminalController.isInteractiveMode = true
                     sessionStatus = .active
+                    
+                    // Check if we should auto-respond to the prompt
+                    processPromptAndAutoRespond(output)
                 }
             }
         } catch {
             print("Error detecting Claude prompt: \(error)")
         }
+    }
+    
+    // MARK: - Automated Decision Making
+    
+    /// Decision tree for responding to common Claude prompts
+    func makeAutomatedDecision(for prompt: ClaudePrompt) -> DecisionOutcome {
+        // Patterns that are safe to auto-approve
+        let safeApprovalPatterns = [
+            "Do you want to create a CLAUDE.md file",
+            "Would you like me to commit these changes",
+            "Do you want me to add comments to this code",
+            "Start a new session",
+            "Do you want to see more examples"
+        ]
+        
+        // Patterns that should always be declined automatically
+        let autoDeclinePatterns = [
+            "delete file",
+            "remove file",
+            "clear all",
+            "erase",
+            "overwrite existing",
+            "force push"
+        ]
+        
+        // Patterns that require user input regardless of settings
+        let requireUserPatterns = [
+            "API key",
+            "password",
+            "credential",
+            "authentication",
+            "secret",
+            "token"
+        ]
+        
+        // First check for patterns that always require user input
+        for pattern in requireUserPatterns {
+            if prompt.prompt.lowercased().contains(pattern.lowercased()) {
+                return .abort
+            }
+        }
+        
+        // Check for critical impact prompts
+        if prompt.criticalImpact {
+            return .abort // Always require user input for critical operations
+        }
+        
+        // Check for safe approval patterns
+        for pattern in safeApprovalPatterns {
+            if prompt.prompt.lowercased().contains(pattern.lowercased()) {
+                return .yes
+            }
+        }
+        
+        // Check for auto-decline patterns
+        for pattern in autoDeclinePatterns {
+            if prompt.prompt.lowercased().contains(pattern.lowercased()) {
+                return .no
+            }
+        }
+        
+        // If we can detect specific selection options in the prompt
+        if !prompt.possibleResponses.isEmpty {
+            // If there are only 2 options and the first one seems affirmative
+            if prompt.possibleResponses.count == 2 {
+                let firstOption = prompt.possibleResponses[0].lowercased()
+                if firstOption.contains("yes") || firstOption.contains("y") || 
+                   firstOption.contains("ok") || firstOption.contains("sure") {
+                    // For simple yes/no prompts that don't match any of our specific patterns,
+                    // default to requiring user input
+                    return .abort
+                }
+            }
+            
+            // For more complex selection prompts, always defer to user
+            return .abort
+        }
+        
+        // Default to requiring user input for anything not specifically handled
+        return .abort
+    }
+    
+    /// Auto respond to a Claude prompt based on context and prompt text
+    func autoRespondToPrompt(_ prompt: String, context: String = "general") -> Bool {
+        // First, parse the prompt to extract possible responses
+        var possibleResponses: [String] = []
+        
+        // Look for patterns like [y/n], (1/2/3), etc.
+        if let range = prompt.range(of: #"\[([^\]]+)\]"#, options: .regularExpression) {
+            let options = prompt[range].dropFirst().dropLast().split(separator: "/")
+            possibleResponses = options.map { String($0).trimmingCharacters(in: .whitespaces) }
+        } else if let range = prompt.range(of: #"\(([^)]+)\)"#, options: .regularExpression) {
+            let options = prompt[range].dropFirst().dropLast().split(separator: "/")
+            possibleResponses = options.map { String($0).trimmingCharacters(in: .whitespaces) }
+        }
+        
+        // Determine criticality
+        let criticalImpact = prompt.lowercased().contains("delete") || 
+                            prompt.lowercased().contains("overwrite") ||
+                            prompt.lowercased().contains("remove") ||
+                            prompt.lowercased().contains("replace") ||
+                            prompt.lowercased().contains("permanent")
+        
+        // Create prompt structure
+        let claudePrompt = ClaudePrompt(
+            prompt: prompt,
+            sourceContext: context,
+            criticalImpact: criticalImpact,
+            possibleResponses: possibleResponses
+        )
+        
+        // Get the decision
+        let decision = makeAutomatedDecision(for: claudePrompt)
+        
+        // Act on the decision
+        switch decision {
+        case .yes:
+            terminalController.sendYes()
+            print("Auto-responded 'yes' to prompt: \(prompt)")
+            return true
+        case .no:
+            terminalController.sendNo()
+            print("Auto-responded 'no' to prompt: \(prompt)")
+            return true
+        case .custom(let response):
+            // Send the custom response followed by enter
+            // This is more complex and would require sending individual keystrokes
+            // For now, we'll just return false to have the user handle it
+            print("Would send custom response: \(response)")
+            return false
+        case .abort:
+            // Return false to indicate we didn't handle it automatically
+            return false
+        }
+    }
+    
+    /// Process terminal output to detect prompts and potentially respond automatically
+    func processPromptAndAutoRespond(_ terminalOutput: String) {
+        // First check if this is a prompt that we should consider auto-responding to
+        let promptPatterns = [
+            "Do you want to",
+            "Would you like to",
+            "Proceed with",
+            "Continue with",
+            "Are you sure",
+            "[y/n]",
+            "(y/n)",
+            "yes/no",
+            "Please select:"
+        ]
+        
+        var isPrompt = false
+        var extractedPrompt = ""
+        
+        // Extract the prompt text
+        for pattern in promptPatterns {
+            if let range = terminalOutput.range(of: ".*\(pattern).*", options: .regularExpression) {
+                extractedPrompt = String(terminalOutput[range])
+                isPrompt = true
+                break
+            }
+        }
+        
+        if isPrompt && !extractedPrompt.isEmpty {
+            // Determine the context of the prompt
+            var context = "general"
+            
+            if terminalOutput.contains("claude init") {
+                context = "initialization"
+            } else if terminalOutput.contains("claude commit") {
+                context = "git_commit"
+            } else if terminalOutput.contains("/review") {
+                context = "code_review"
+            } else if terminalOutput.contains("/doctor") {
+                context = "diagnostics"
+            }
+            
+            // Try to auto-respond
+            let didAutoRespond = autoRespondToPrompt(extractedPrompt, context: context)
+            
+            if didAutoRespond {
+                print("Auto-responded to prompt: \(extractedPrompt)")
+            } else {
+                print("Prompt requires user input: \(extractedPrompt)")
+            }
+        }
+    }
+    
+    /// Check if a prompt should be auto-responded to based on user settings
+    func shouldAutoRespond(to prompt: String, context: String) -> Bool {
+        // This would typically check user preferences, but for now we'll implement a basic version
+        // that only auto-responds to non-critical prompts
+        
+        // Critical contexts that should never be auto-responded to
+        let criticalContexts = ["authentication", "deletion", "overwrite"]
+        
+        // Check if this is a critical context
+        for criticalContext in criticalContexts {
+            if context.contains(criticalContext) {
+                return false
+            }
+        }
+        
+        // Critical terms in the prompt itself
+        let criticalTerms = ["delete", "remove", "overwrite", "force", "password", "token", "api key"]
+        
+        // Check if the prompt contains critical terms
+        for term in criticalTerms {
+            if prompt.lowercased().contains(term) {
+                return false
+            }
+        }
+        
+        // For this implementation, we'll auto-respond to simple yes/no questions that aren't critical
+        return prompt.contains("[y/n]") || prompt.contains("(y/n)") || 
+               prompt.contains("yes/no") || prompt.lowercased().contains("do you want to")
     }
 }
 
@@ -525,4 +744,20 @@ enum ClaudeSessionStatus: String {
 struct ClaudeConfig {
     var apiKey: String
     var workspacePath: String?
+}
+
+/// Decision outcome type for automated responses
+enum DecisionOutcome {
+    case yes            // Affirmative response
+    case no             // Negative response
+    case abort          // Don't respond automatically, defer to user
+    case custom(String) // Custom response
+}
+
+/// Structure to represent a prompt that might be shown to the user
+struct ClaudePrompt {
+    let prompt: String          // The text of the prompt
+    let sourceContext: String   // Context about where this prompt came from
+    let criticalImpact: Bool    // Whether this prompt has critical impact
+    var possibleResponses: [String] = [] // Possible response options
 }
